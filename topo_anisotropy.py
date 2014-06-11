@@ -3,6 +3,7 @@
 import numpy as np
 from math import pi
 from itertools import izip
+from operator import itemgetter
 import scipy.io 
 import math
 
@@ -16,6 +17,9 @@ xvalues = np.array([])
 yvalues = np.array([])
 zvalues = np.array([])
 
+dx = np.array([])
+dy = np.array([])
+dist = np.array([])
 
 #Arrays containing the position data of the 
 #study area
@@ -27,7 +31,7 @@ zArea=[]
 tilt=[]
 aspect_ratio=[]
 coords=[]
-cor =[]
+
 
 kk_prime=5; 
 kk=0;
@@ -36,7 +40,7 @@ l=0;
 
 
 #Loading the .mat file and getting x,y,z data
-mat = scipy.io.loadmat('data.mat')
+mat = scipy.io.loadmat('numbers.mat')
 data = mat['dat']
 xvalues = data[:,0]
 yvalues = data[:,1]
@@ -92,7 +96,7 @@ for k in range(0,dataSize):
         print kk,"percent done\n"
         kk=kk+kk_prime
 
-    #Current values
+    #Current values(single values)
 	xx=data[k,0]
 	yy=data[k,1]
 	cc=data[k,2]
@@ -100,26 +104,64 @@ for k in range(0,dataSize):
 	if (radius>(xx-xvalues.min()) or 
 	radius>(yy-yvalues.min()) or
 	radius+xx>xvalues.max() or 
-	radius+yy>yvalues.max()):
-			continue
+	radius+yy>yvalues.max()):		
+		continue
 
 	l = l + 1
 	# Window switch
    	#measure correlation per radius per angle, generates correlogram matrix
-    #WINDOW AVRAGING
+    #WINDOW AVERAGING
+
 	if window == 1 :
 		# Step through radii
-		for j in range (1,radius/radstep-((radius-radwindow)/radstep)):
+		for j in range (0,radius/radstep-((radius-radwindow)/radstep)):
 			# Advance radius length per iteration
 			rad=(radius-radwindow)+radstep*j
 			# Step through angles, 5 degree intervals
-			for i in range(1,len(angle)):
+			for i in range(0,len(angle)):
 				xrad=math.cos(angle[i])*rad # Find adjacent length (x component)
 				yrad=math.sin(angle[i])*rad # Find opposite length (y component)
 				dx = (xx + xrad) - xvalues
 				dy = (yy+yrad)-yvalues
 				dist = np.power(np.power(dx,2) + np.power(dy,2),0.5)
-				#dist=sqrt(dx.^2+dy.^2)
+				#val = distance to the closest point 
+				#ind = index of that point
+				# Find point closest to the radius value j for each angle i			
+				val = min(enumerate(dist),key=itemgetter(1))[1]
+				ind = min(enumerate(dist),key=itemgetter(1))[0]
+				#Measure correlation and stick it in an angle x radius matrix
+				cor[i,j]=np.power(cc-c[ind],2)*0.5
+
+		if (j>0):
+			#Mean of the rows gives 1 column
+			temp = np.array([])
+			temp = (np.mean(cor[:,0:(j+1)],axis = 1))
+			temp.shape = (len(temp),1)
+			cor[:,j] = temp
+
+	for j in range( 0,len(cor[:,1])/2 ):
+		cor_bi[j,:] = (cor[j,:]+cor[j+36,:])/2
+
+	val1 = np.array([])
+	ind = np.array([])
+	val2 = np.array([])
+	semiminor = np.array([])
+	
+	#val1 = 	min(enumerate(cor_bi),key=itemgetter(1))[1]	
+	val1 = cor_bi.min(axis=0)
+	for j in range (0,len(cor_bi)):
+		tmpVal = min(enumerate(cor_bi[:,j]),key=itemgetter(1))[1]    
+		ind = np.append(ind,tmpVal)
+	
+			
+
+
+
+
+			
+				
+
+				
 
 	
 

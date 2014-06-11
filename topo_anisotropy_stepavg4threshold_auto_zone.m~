@@ -71,7 +71,7 @@ for k=1:1:length(dat)
     l=l+1;
     if window==1 % Window switch
         % % measure correlation per radius per angle, generates correlogram matrix
-        % WINDOW AVRAGING
+        % WINDOW AVERAGING
         for j=1:radius/radstep-((radius-radwindow)/radstep) % Step through radii
             rad=(radius-radwindow)+radstep*j; % Advance radius length per iteration
             for i=1:length(angle) % Step through angles, 5 degree intervals
@@ -80,6 +80,8 @@ for k=1:1:length(dat)
                 dx=(xx+xrad)-x(:);
                 dy=(yy+yrad)-y(:);
                 dist=sqrt(dx.^2+dy.^2);
+                %Val store the minimum value and ind stores the location
+                %in the array the value was found
                 [val,ind]=min(dist); % Find point closest to the radius value j for each angle i
                 cor(i,j)=((cc-c(ind)).^2)*.5; % Measure correlation and stick it in an angle x radius matrix
                 %         cor(i,j)=((cc-c(ind)))*.5; % Measure correlation and stick it in an angle x radius matrix
@@ -110,6 +112,7 @@ for k=1:1:length(dat)
                 %         cor(i,j)=cc-c(ind);
             end
             if j>1
+                %Mean of the rows gives 1 column
                 cor(:,j)=mean(cor(:,1:j),2);
             end
         end
@@ -118,7 +121,7 @@ for k=1:1:length(dat)
     for j=1:length(cor(:,1))/2
         cor_bi(j,:)=(cor(j,:)+cor(j+36,:))./2;
     end
-    
+  
     % for k=2:length(cor_bi(1,:))
     %     cor_bi(:,k)=mean(cor_bi(:,1:k));
     % end
