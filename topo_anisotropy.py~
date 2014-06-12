@@ -20,6 +20,9 @@ zvalues = np.array([])
 dx = np.array([])
 dy = np.array([])
 dist = np.array([])
+aspect_ratio = np.array([])
+tilt = np.array([])
+coords = np.array([])
 
 #Arrays containing the position data of the 
 #study area
@@ -73,7 +76,7 @@ else:
 	cor = np.zeros((len(angle),radius/radstep)) 
 
 cor_bi=np.zeros((len(angle)/2,radius/radstep))
-print cor
+
 #initialize mean normalized correlogram matrix
 mean_norm_cor=cor
 
@@ -164,7 +167,7 @@ for k in range(0,dataSize):
 				
 	
 					
-	print len(cor[:,1])
+	
 	for j in range( 0,len(cor[:,1])/2 ):
 		cor_bi[j,:] = (cor[j,:]+cor[j+36,:])/2
 
@@ -192,7 +195,15 @@ for k in range(0,dataSize):
 
 	semimajor = radius
 	semiminor = radius * val1/val2
+	aspect_ratio = 1 - np.power(np.power(semiminor,2) / np.power(semimajor,2),0.5)
 
+	for i in range (0,len(ind)):
+		indVal = ind[i]
+		degVal = math.degrees(angle[indVal])
+		tilt = np.append(tilt,degval)
+
+	coords = np.append([xx,yy,zz])
+	
 
 
 
