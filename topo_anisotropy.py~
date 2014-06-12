@@ -24,6 +24,7 @@ aspect_ratio = np.array([])
 tilt = np.array([])
 coords = np.array([])
 
+
 #Arrays containing the position data of the 
 #study area
 xArea=[]
@@ -54,17 +55,17 @@ data = mat['dat']
 #Assign dimensions of study area, try to keep it small. Necessary for huge
 # maps. Comment out otherwise.
 #dat=fulldat
-left=9.892e+5
+left=1.190e+6
 right=1.191e+6
 up=3.011e+6
-down=2.85e+6
+down=3e+6
 
 #Getting only the ones that are within the limits
-data=data[data[:,0]>=left-radius,:]
-data=data[data[:,0]<=right+radius,:]
-data=data[data[:,1]>=down-radius,:]
-data=data[data[:,1]<=up+radius,:]
-
+#data=data[data[:,0]>=left-radius,:]
+#data=data[data[:,0]<=right+radius,:]
+#data=data[data[:,1]>=down-radius,:]
+#data=data[data[:,1]<=up+radius,:]
+data=data[50000:50001,:]
 
 if window == 1 :
 	#cor has dimensions based on left, right, up, down
@@ -90,6 +91,8 @@ yvalues = data[:,1]
 zvalues = data[:,2]
 zvalues = zvalues.astype(int)
 
+
+
 dataSize = len(xvalues)
 
 kk_prime=5; 
@@ -101,17 +104,27 @@ for k in range(0,dataSize):
 	    print kk,"percent done\n"
 	    kk=kk+kk_prime
 	
+	
 	#Current values(single values)
 	xx=data[k,0]
 	yy=data[k,1]
 	cc=data[k,2]
 
-	#if (radius>(xx-xvalues.min()) or 
-	#radius>(yy-yvalues.min()) or
-	#radius+xx>xvalues.max() or 
-	#radius+yy>yvalues.max()):		
-	#	continue
+	print xvalues
+	print yvalues
+	print zvalues
+	
+	print xx
+	print yy
+	print cc
 
+	if (radius>(xx-xvalues.min()) or 
+	radius>(yy-yvalues.min()) or
+	radius+xx>xvalues.max() or 
+	radius+yy>yvalues.max()):		
+		continue
+
+	print "hello"
 	l = l + 1
 	# Window switch
    	#measure correlation per radius per angle, generates correlogram matrix
@@ -174,7 +187,11 @@ for k in range(0,dataSize):
 	val1 = np.array([])
 	ind = np.array([])
 	val2 = np.array([])
-	semiminor = np.array([])
+	semiminor = np.zeros(shape = (1,radius/radstep))
+	tilt = np.zeros(shape = (dataSize,radius/radstep))
+	aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
+	coords = np.zeros(shape = (dataSize,3))
+	
 
 	# How about just taking the 1-ratio of strongest correlation/orthogonal correlation
 	#value?
@@ -195,14 +212,23 @@ for k in range(0,dataSize):
 
 	semimajor = radius
 	semiminor = radius * val1/val2
-	aspect_ratio = 1 - np.power(np.power(semiminor,2) / np.power(semimajor,2),0.5)
+	aspect_ratio[l,:] = 1 - np.power(np.power(semiminor,2) / np.power(semimajor,2),0.5)
+
+	tmpArray = np.zeros(shape = (1,radius/radstep))
+
+	#print len(tmpArray)
+	#print len(tilt)
 
 	for i in range (0,len(ind)):
 		indVal = ind[i]
 		degVal = math.degrees(angle[indVal])
-		tilt = np.append(tilt,degval)
+		tmpArray.put(i,degVal)
 
-	coords = np.append([xx,yy,zz])
+	#print ind
+	#print tmpArray
+	#print tilt	
+	tilt[l,:] = tmpArray
+	coords[l,:] = [xx,yy,cc]
 	
 
 

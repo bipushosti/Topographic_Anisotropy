@@ -38,6 +38,7 @@ dat=dat(dat(:,1)>=left-radius,:);
 dat=dat(dat(:,1)<=right+radius,:);
 dat=dat(dat(:,2)>=down-radius,:);
 dat=dat(dat(:,2)<=up+radius,:);
+s=length(dat);
 
 % chord=zeros(length(angle)/2,2); % initialize chord array
 if window==1
