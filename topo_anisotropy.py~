@@ -34,13 +34,13 @@ coords=[]
 
 l=0;
 
-window=1
+window=0
 radius=1800
 radwindow=4000 
 radstep=900 # measure correlation to radius advancing by radstep
-angle = np.arange(0,355*pi/180,5*pi/180)[np.newaxis]#5 degree separation of spokes.
+angle = np.arange(0,356*pi/180,5*pi/180)[np.newaxis]#5 degree separation of spokes.
 angle = angle.T
-spoke  = np.zeros(shape = (71,1)) # initialize spoke array
+spoke  = np.zeros(shape = (72,1)) # initialize spoke array
 #**********************************************************************************
 
 
@@ -59,9 +59,9 @@ down=2.85e+6
 #Getting only the ones that are within the limits
 data=data[data[:,0]>=left-radius,:]
 data=data[data[:,0]<=right+radius,:]
-print data
 data=data[data[:,1]>=down-radius,:]
 data=data[data[:,1]<=up+radius,:]
+
 
 if window == 1 :
 	#cor has dimensions based on left, right, up, down
@@ -73,6 +73,7 @@ else:
 	cor = np.zeros((len(angle),radius/radstep)) 
 
 cor_bi=np.zeros((len(angle)/2,radius/radstep))
+print cor
 #initialize mean normalized correlogram matrix
 mean_norm_cor=cor
 
@@ -160,9 +161,10 @@ for k in range(0,dataSize):
 				temp = np.array([])
 				temp = np.mean(cor[:,0:j],axis = 1)
 				cor[:,j] = temp
-
-
-
+				
+	
+					
+	print len(cor[:,1])
 	for j in range( 0,len(cor[:,1])/2 ):
 		cor_bi[j,:] = (cor[j,:]+cor[j+36,:])/2
 
