@@ -29,10 +29,11 @@ coords=[];
 % Assign dimensions of study area, try to keep it small. Necessary for huge
 % maps. Comment out otherwise.
 dat=fulldat;
-left=9.892e5;
-right=1.191e6;
-up=3.011e6;
-down=2.85e6;
+left=1.190e+6;
+right=1.191e+6;
+up=3.011e+6;
+down=3e+6;
+
 %Getting only the ones that are within the limits
 dat=dat(dat(:,1)>=left-radius,:);
 dat=dat(dat(:,1)<=right+radius,:);

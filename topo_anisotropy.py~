@@ -6,6 +6,7 @@ from itertools import izip
 from operator import itemgetter
 import scipy.io 
 import math
+import pdb
 
 
 
@@ -61,12 +62,22 @@ up=3.011e+6
 down=3e+6
 
 #Getting only the ones that are within the limits
-#data=data[data[:,0]>=left-radius,:]
-#data=data[data[:,0]<=right+radius,:]
-#data=data[data[:,1]>=down-radius,:]
-#data=data[data[:,1]<=up+radius,:]
-data=data[50000:50001,:]
+data=data[data[:,0]>=left-radius,:]
+data=data[data[:,0]<=right+radius,:]
+data=data[data[:,1]>=down-radius,:]
+data=data[data[:,1]<=up+radius,:]
 
+#topo X coords
+xvalues = data[:,0]
+#topo Y coords
+yvalues = data[:,1]
+#topo Z coords rounded to an integer
+zvalues = data[:,2]
+zvalues = zvalues.astype(int)
+
+
+
+dataSize = len(xvalues)
 if window == 1 :
 	#cor has dimensions based on left, right, up, down
 	#size of cor based on number of times we want to increase the scale
@@ -83,17 +94,7 @@ mean_norm_cor=cor
 
 
 
-#topo X coords
-xvalues = data[:,0]
-#topo Y coords
-yvalues = data[:,1]
-#topo Z coords rounded to an integer
-zvalues = data[:,2]
-zvalues = zvalues.astype(int)
 
-
-
-dataSize = len(xvalues)
 
 kk_prime=5; 
 kk=0;
@@ -104,19 +105,19 @@ for k in range(0,dataSize):
 	    print kk,"percent done\n"
 	    kk=kk+kk_prime
 	
-	
+	print k
 	#Current values(single values)
 	xx=data[k,0]
 	yy=data[k,1]
 	cc=data[k,2]
 
-	print xvalues
-	print yvalues
-	print zvalues
+	#print xvalues
+	#print yvalues
+	#print zvalues
 	
-	print xx
-	print yy
-	print cc
+	#print xx
+	#print yy
+	#print cc
 
 	if (radius>(xx-xvalues.min()) or 
 	radius>(yy-yvalues.min()) or
@@ -229,7 +230,7 @@ for k in range(0,dataSize):
 	#print tilt	
 	tilt[l,:] = tmpArray
 	coords[l,:] = [xx,yy,cc]
-	
+	print "done\n"
 
 
 
