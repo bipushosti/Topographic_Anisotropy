@@ -29,22 +29,17 @@ coords=[];
 % Assign dimensions of study area, try to keep it small. Necessary for huge
 % maps. Comment out otherwise.
 dat=fulldat;
-left=1.190e+6;
-right=1.191e+6;
-up=3.011e+6;
-down=3e+6;
-
-%Getting only the ones that are within the limits
+left=9.892e5;
+right=1.191e6;
+up=3.011e6;
+down=2.85e6;
 dat=dat(dat(:,1)>=left-radius,:);
 dat=dat(dat(:,1)<=right+radius,:);
 dat=dat(dat(:,2)>=down-radius,:);
 dat=dat(dat(:,2)<=up+radius,:);
-s=length(dat);
 
 % chord=zeros(length(angle)/2,2); % initialize chord array
 if window==1
-    %cor has dimensions based on left, right, up, down
-    %size of cor based on number of times we want to increase the scale
     cor=zeros(length(angle),radius/radstep-((radius-radwindow)/radstep)); % initialize raw correlogram matrix
 else
     cor=zeros(length(angle),radius/radstep); % initialize raw correlogram matrix FOR FULL AVERAGING
@@ -54,10 +49,12 @@ mean_norm_cor=cor; % initialize mean normalized correlogram matrix
 
 x=dat(:,1); %topo X coords
 y=dat(:,2); %topo Y coords
-c=round(dat(:,3));  %topo Z, rounded to integer (important for fine anisotropy in almost flat regions)
+%c=round(dat(:,3));  %topo Z, rounded to integer (important for fine anisotropy in almost flat regions)
+c=dat(:,3);
 kk_prime=5; kk=0;
 l=0;
-for k=1:1:length(dat)
+%for k=1:1:length(dat)
+for k = 556:560
     if k/length(dat)*100 >= kk
         fprintf('%f percent done\n',kk);
         kk=kk+kk_prime;
@@ -70,10 +67,11 @@ for k=1:1:length(dat)
 %     elseif y(k)<2885e3 || y(k)>3108e3 || x(k)<9928e2 || x(k)>1215e3
 %         continue
     end
+   
     l=l+1;
     if window==1 % Window switch
         % % measure correlation per radius per angle, generates correlogram matrix
-        % WINDOW AVERAGING
+        % WINDOW AVRAGING
         for j=1:radius/radstep-((radius-radwindow)/radstep) % Step through radii
             rad=(radius-radwindow)+radstep*j; % Advance radius length per iteration
             for i=1:length(angle) % Step through angles, 5 degree intervals
@@ -82,8 +80,6 @@ for k=1:1:length(dat)
                 dx=(xx+xrad)-x(:);
                 dy=(yy+yrad)-y(:);
                 dist=sqrt(dx.^2+dy.^2);
-                %Val store the minimum value and ind stores the location
-                %in the array the value was found
                 [val,ind]=min(dist); % Find point closest to the radius value j for each angle i
                 cor(i,j)=((cc-c(ind)).^2)*.5; % Measure correlation and stick it in an angle x radius matrix
                 %         cor(i,j)=((cc-c(ind)))*.5; % Measure correlation and stick it in an angle x radius matrix
@@ -94,27 +90,25 @@ for k=1:1:length(dat)
             end
         end
     else % For total averaging over radius iterations
-        %For loop with j; changes the length scale
         for j=1:radius/radstep % Step through radii, ALL AVERAGING
             rad=radstep*j; % Advance radius length per iteration
-            %For loop with i; changes the angle
             for i=1:length(angle) % Step through angles, 5 degree intervals
                 xrad=cos(angle(i))*rad; % Find adjacent length (x component)
                 yrad=sin(angle(i))*rad; % Find opposite length (y component)
-                %Finding the closest point; Least squares method
                 dx=(xx+xrad)-x(:);
                 dy=(yy+yrad)-y(:);
                 dist=sqrt(dx.^2+dy.^2);
-                %val = distance to the closest point; ind = index of that
-                %point
                 [val,ind]=min(dist); % Find point closest to the radius value j for each angle i
-                %Comparing the elevation values between the point of search
-                % and the closest point
-                cor(i,j)=((cc-c(ind)).^2)*.5; % Measure correlation and stick it in an angle x radius matrix
+                %fprintf('Val and ind are: \n');
+                tempSub = cc - c(ind);
+                tempPower = tempSub.^2;
+                tempMult = tempPower * 0.5;
+                cor(i,j)=((cc-c(ind))^2)*.5; % Measure correlation and stick it in an angle x radius matrix
                 %         cor(i,j)=cc-c(ind);
+                
+                
             end
             if j>1
-                %Mean of the rows gives 1 column
                 cor(:,j)=mean(cor(:,1:j),2);
             end
         end
@@ -123,7 +117,7 @@ for k=1:1:length(dat)
     for j=1:length(cor(:,1))/2
         cor_bi(j,:)=(cor(j,:)+cor(j+36,:))./2;
     end
-  
+    
     % for k=2:length(cor_bi(1,:))
     %     cor_bi(:,k)=mean(cor_bi(:,1:k));
     % end

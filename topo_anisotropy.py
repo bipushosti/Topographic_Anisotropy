@@ -56,10 +56,10 @@ data = mat['dat']
 #Assign dimensions of study area, try to keep it small. Necessary for huge
 # maps. Comment out otherwise.
 #dat=fulldat
-left=1.190e+6
-right=1.191e+6
-up=3.011e+6
-down=3e+6
+left=9.892e5
+right=1.191e6
+up=3.011e6
+down=2.85e6
 
 #Getting only the ones that are within the limits
 data=data[data[:,0]>=left-radius,:]
@@ -73,7 +73,7 @@ xvalues = data[:,0]
 yvalues = data[:,1]
 #topo Z coords rounded to an integer
 zvalues = data[:,2]
-zvalues = zvalues.astype(int)
+#zvalues = zvalues.astype(int)
 
 
 
@@ -100,7 +100,8 @@ kk_prime=5;
 kk=0;
 
 
-for k in range(0,dataSize):
+#for k in range(0,dataSize):
+for k in range(555,560):
 	if (k/dataSize *100 >= kk):
 	    print kk,"percent done\n"
 	    kk=kk+kk_prime
@@ -111,21 +112,53 @@ for k in range(0,dataSize):
 	yy=data[k,1]
 	cc=data[k,2]
 
+	#xx = xvalues[k]
+	#yy = yvalues[k]
+	#cc = zvalues[k]
+
 	#print xvalues
 	#print yvalues
 	#print zvalues
-	
+	#print "\n"
+	#print "xval :"
 	#print xx
+	#print "yval :"
+	#print yy
+	#print "zval :"
+	#print cc
+	#print "\n"
+	#print "condition1 :"
+	#print radius -(xx-np.amin(xvalues))
+	#print "condition2 :"
+	#print radius -(yy-np.amin(yvalues))
+	#print "condition3 :"
+	#print (radius+xx)- np.amax(xvalues)
+	#print "condition4 :"
+	#print (radius+yy)-np.amax(yvalues)
+	#print "\n minofX:"
+	#print np.amin(xvalues)
+	#print "\n maxofY:"
+	#print np.amax(yvalues)
+	#print "\n maxofZ:"
+	#print np.amax(zvalues)
 	#print yy
 	#print cc
-
-	if (radius>(xx-xvalues.min()) or 
-	radius>(yy-yvalues.min()) or
-	(radius+xx)>xvalues.max() or 
-	(radius+yy)>yvalues.max()):		
+	
+	
+	if (radius>(xx-np.amin(xvalues)) or 
+	radius>(yy-np.amin(yvalues)) or
+	(radius+xx)>np.amax(xvalues) or 
+	(radius+yy)>np.amax(yvalues)):		
 		continue
+	
+	#if (radius>(xx-xvalues.min()) or 
+	#radius>(yy-yvalues.min()) or
+	#(radius+xx)>xvalues.max() or 
+	#(radius+yy)>yvalues.max()):		
+	#	continue
+	
 
-	print "hello"
+	print "Hello1 \n"
 	l = l + 1
 	# Window switch
    	#measure correlation per radius per angle, generates correlogram matrix
@@ -154,7 +187,7 @@ for k in range(0,dataSize):
 			if (j>0):
 				#Mean of the rows gives 1 column
 				temp = np.array([])
-				temp = np.mean(cor[:,0:j],axis = 1)
+				temp = np.mean(cor[:,0:j+1],axis = 1)
 				cor[:,j] = temp
 	else:
 		#For loop with j; changes the length scale
@@ -173,10 +206,16 @@ for k in range(0,dataSize):
 				ind = min(enumerate(dist),key=itemgetter(1))[0]
 				#Measure correlation and stick it in an angle x radius matrix
 				cor[i,j]=np.power(cc-zvalues[ind],2)*0.5
+
+				tempSub = cc - zvalues[ind]
+				tempPower= np.power(tempSub,2)
+				tempMult = tempPower * 0.5
+				temp22 = val
+
 			if (j>0):
 				#Mean of the rows gives 1 column
 				temp = np.array([])
-				temp = np.mean(cor[:,0:j],axis = 1)
+				temp = np.mean(cor[:,0:j+1],axis = 1)
 				cor[:,j] = temp
 				
 	
@@ -224,13 +263,71 @@ for k in range(0,dataSize):
 		indVal = ind[i]
 		degVal = math.degrees(angle[indVal])
 		tmpArray.put(i,degVal)
-
-	#print ind
-	#print tmpArray
-	#print tilt	
+		
 	tilt[l,:] = tmpArray
 	coords[l,:] = [xx,yy,cc]
-	print "done\n"
+	#print "Hello2 \n"
+	#print semiminor
+
+
+
+
+print coords
+print cor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
