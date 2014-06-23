@@ -92,9 +92,15 @@ cor_bi=np.zeros((len(angle)/2,radius/radstep))
 #initialize mean normalized correlogram matrix
 mean_norm_cor=cor
 
+#*************************************************************
+#			Array Declarations
 
-
-
+tmpArray = np.zeros(shape = (1,radius/radstep))
+semiminor = np.zeros(shape = (1,radius/radstep))
+tilt = np.zeros(shape = (dataSize,radius/radstep))
+aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
+coords = np.zeros(shape = (dataSize,3))
+#**************************************************************
 
 kk_prime=5; 
 kk=0;
@@ -159,7 +165,12 @@ for k in range(555,560):
 	
 
 	print "Hello1 \n"
-	l = l + 1
+	
+	#Changing indices so that it starts at 0 and not 1
+	#l = l + 1
+
+
+
 	# Window switch
    	#measure correlation per radius per angle, generates correlogram matrix
 	#WINDOW AVERAGING
@@ -224,26 +235,15 @@ for k in range(555,560):
 	for j in range( 0,len(cor[:,1])/2 ):
 		cor_bi[j,:] = (cor[j,:]+cor[j+36,:])/2
 
-	val1 = np.array([])
+	
 	ind = np.array([])
 	val2 = np.array([])
-	semiminor = np.zeros(shape = (1,radius/radstep))
-	tilt = np.zeros(shape = (dataSize,radius/radstep))
-	aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
-	coords = np.zeros(shape = (dataSize,3))
-	
-
+	val1 = np.array([])
 	# How about just taking the 1-ratio of strongest correlation/orthogonal correlation
 	#value?
 	#Getting the minimum from the columns and storing the value in val1[]
 	#	and the index in ind[]
-	val1 = cor_bi.min(axis=0)
-
-	#Looping through to get the indexes
-	for j in range (0,len(cor_bi[0,:])):
-		tmpVal = min(enumerate(cor_bi[:,j]),key=itemgetter(1))[0]    
-		ind = np.append(ind,tmpVal)
-
+	val1 = cor_bi.min(axis = 0)
 	ind = cor_bi.argmin(axis = 0)
 
 	for i in range(0,len(ind)):
@@ -256,7 +256,7 @@ for k in range(555,560):
 	semiminor = radius * val1/val2
 	aspect_ratio[l,:] = 1 - np.power(np.power(semiminor,2) / np.power(semimajor,2),0.5)
 
-	tmpArray = np.zeros(shape = (1,radius/radstep))
+	
 
 	#print len(tmpArray)
 	#print len(tilt)
@@ -270,7 +270,8 @@ for k in range(555,560):
 	coords[l,:] = [xx,yy,cc]
 	#print "Hello2 \n"
 	#print semiminor
-
+	l = l + 1
+	l = l
 
 
 

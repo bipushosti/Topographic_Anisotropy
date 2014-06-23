@@ -142,6 +142,7 @@ for k = 556:560
     aspect_ratio(l,:)=1-sqrt(semiminor.^2./semimajor^2);
     tilt(l,:)=rad2deg(angle(ind));
     coords(l,:)=[xx yy cc];
+    fprintf('Hello\n');
     % Convert vals to degrees for ellipse build (recalc back later):
 %     rad_deg=distdim(radius,'m','deg');
 %     xx_deg=distdim(xx,'m','deg');
