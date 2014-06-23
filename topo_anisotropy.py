@@ -238,11 +238,7 @@ for k in range(555,560):
 	#Getting the minimum from the columns and storing the value in val1[]
 	#	and the index in ind[]
 	val1 = cor_bi.min(axis=0)
-
-	#Looping through to get the indexes
-	for j in range (0,len(cor_bi[0,:])):
-		tmpVal = min(enumerate(cor_bi[:,j]),key=itemgetter(1))[0]    
-		ind = np.append(ind,tmpVal)
+	ind = cor_bi.argmin(axis = 0)
 
 	for i in range(0,len(ind)):
 		if ind[i] <=18:
@@ -273,7 +269,7 @@ for k in range(555,560):
 
 
 print coords
-print cor
+#print cor
 
 
 

@@ -187,7 +187,7 @@ for k in range(555,560):
 			if (j>0):
 				#Mean of the rows gives 1 column
 				temp = np.array([])
-				temp = np.mean(cor[:,0:j],axis = 1)
+				temp = np.mean(cor[:,0:j+1],axis = 1)
 				cor[:,j] = temp
 	else:
 		#For loop with j; changes the length scale
@@ -244,6 +244,8 @@ for k in range(555,560):
 		tmpVal = min(enumerate(cor_bi[:,j]),key=itemgetter(1))[0]    
 		ind = np.append(ind,tmpVal)
 
+	ind = cor_bi.argmin(axis = 0)
+
 	for i in range(0,len(ind)):
 		if ind[i] <=18:
 			val2 = np.append(val2,cor_bi[ind[i]+18,len(cor_bi[1,:])-1])
@@ -273,7 +275,7 @@ for k in range(555,560):
 
 
 print coords
-print cor
+#print cor
 
 
 

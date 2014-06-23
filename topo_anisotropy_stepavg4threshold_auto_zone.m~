@@ -49,7 +49,8 @@ mean_norm_cor=cor; % initialize mean normalized correlogram matrix
 
 x=dat(:,1); %topo X coords
 y=dat(:,2); %topo Y coords
-c=round(dat(:,3));  %topo Z, rounded to integer (important for fine anisotropy in almost flat regions)
+%c=round(dat(:,3));  %topo Z, rounded to integer (important for fine anisotropy in almost flat regions)
+c=dat(:,3);
 kk_prime=5; kk=0;
 l=0;
 %for k=1:1:length(dat)
@@ -99,10 +100,10 @@ for k = 556:560
                 dist=sqrt(dx.^2+dy.^2);
                 [val,ind]=min(dist); % Find point closest to the radius value j for each angle i
                 %fprintf('Val and ind are: \n');
-                tempSub = cc -c(ind);
+                tempSub = cc - c(ind);
                 tempPower = tempSub.^2;
-                temp
-                cor(i,j)=((cc-c(ind)).^2)*.5; % Measure correlation and stick it in an angle x radius matrix
+                tempMult = tempPower * 0.5;
+                cor(i,j)=((cc-c(ind))^2)*.5; % Measure correlation and stick it in an angle x radius matrix
                 %         cor(i,j)=cc-c(ind);
                 
                 
