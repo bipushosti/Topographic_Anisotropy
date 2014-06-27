@@ -10,6 +10,10 @@ import pdb
 
 
 
+
+
+
+
 #******************************************Variables******************************
 
 #All the x,y and z values 
@@ -26,16 +30,7 @@ tilt = np.array([])
 coords = np.array([])
 
 
-#Arrays containing the position data of the 
-#study area
-xArea=[]
-yArea=[]
-zArea=[]
 
-
-tilt=[]
-aspect_ratio=[]
-coords=[]
 
 l=0;
 
@@ -46,6 +41,12 @@ radstep=900 # measure correlation to radius advancing by radstep
 angle = np.arange(0,356*pi/180,5*pi/180)[np.newaxis]#5 degree separation of spokes.
 angle = angle.T
 spoke  = np.zeros(shape = (72,1)) # initialize spoke array
+
+
+
+
+
+
 #**********************************************************************************
 
 
@@ -67,6 +68,11 @@ data=data[data[:,0]<=right+radius,:]
 data=data[data[:,1]>=down-radius,:]
 data=data[data[:,1]<=up+radius,:]
 
+
+
+
+
+
 #topo X coords
 xvalues = data[:,0]
 #topo Y coords
@@ -74,6 +80,11 @@ yvalues = data[:,1]
 #topo Z coords rounded to an integer
 zvalues = data[:,2]
 #zvalues = zvalues.astype(int)
+
+
+
+
+
 
 
 
@@ -92,6 +103,8 @@ cor_bi=np.zeros((len(angle)/2,radius/radstep))
 #initialize mean normalized correlogram matrix
 mean_norm_cor=cor
 
+
+
 #*************************************************************
 #			Array Declarations
 
@@ -106,8 +119,10 @@ kk_prime=5;
 kk=0;
 
 
+
+
 #for k in range(0,dataSize):
-for k in range(555,560):
+for k in range(555,755):
 	if (k/dataSize *100 >= kk):
 	    print kk,"percent done\n"
 	    kk=kk+kk_prime
@@ -118,37 +133,6 @@ for k in range(555,560):
 	yy=data[k,1]
 	cc=data[k,2]
 
-	#xx = xvalues[k]
-	#yy = yvalues[k]
-	#cc = zvalues[k]
-
-	#print xvalues
-	#print yvalues
-	#print zvalues
-	#print "\n"
-	#print "xval :"
-	#print xx
-	#print "yval :"
-	#print yy
-	#print "zval :"
-	#print cc
-	#print "\n"
-	#print "condition1 :"
-	#print radius -(xx-np.amin(xvalues))
-	#print "condition2 :"
-	#print radius -(yy-np.amin(yvalues))
-	#print "condition3 :"
-	#print (radius+xx)- np.amax(xvalues)
-	#print "condition4 :"
-	#print (radius+yy)-np.amax(yvalues)
-	#print "\n minofX:"
-	#print np.amin(xvalues)
-	#print "\n maxofY:"
-	#print np.amax(yvalues)
-	#print "\n maxofZ:"
-	#print np.amax(zvalues)
-	#print yy
-	#print cc
 	
 	
 	if (radius>(xx-np.amin(xvalues)) or 
@@ -164,7 +148,7 @@ for k in range(555,560):
 	#	continue
 	
 
-	print "Hello1 \n"
+	#print "Hello1 \n"
 	
 	#Changing indices so that it starts at 0 and not 1
 	#l = l + 1
@@ -270,13 +254,16 @@ for k in range(555,560):
 	coords[l,:] = [xx,yy,cc]
 	#print "Hello2 \n"
 	#print semiminor
+	
+
 	l = l + 1
-	l = l
+
+np.savetxt('aspect_ratio.txt',aspect_ratio)
+np.savetxt('tilt.txt',tilt)
+np.savetxt('coords.txt',coords)
 
 
 
-print coords
-#print cor
 
 
 

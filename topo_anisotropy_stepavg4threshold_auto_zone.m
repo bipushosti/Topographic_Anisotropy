@@ -54,7 +54,7 @@ c=dat(:,3);
 kk_prime=5; kk=0;
 l=0;
 %for k=1:1:length(dat)
-for k = 556:560
+for k = 556:570
     if k/length(dat)*100 >= kk
         fprintf('%f percent done\n',kk);
         kk=kk+kk_prime;
