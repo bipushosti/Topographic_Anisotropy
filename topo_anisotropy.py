@@ -32,7 +32,7 @@ coords = np.array([])
 
 
 
-l=0;
+l=0
 
 window=0
 radius=1800
@@ -115,8 +115,8 @@ aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
 coords = np.zeros(shape = (dataSize,3))
 #**************************************************************
 
-kk_prime=5; 
-kk=0;
+kk_prime=5
+kk=0
 
 
 
@@ -133,6 +133,15 @@ for k in range(555,755):
 	yy=data[k,1]
 	cc=data[k,2]
 
+	print xx - np.amin(xvalues)
+	print "\n"
+	print yy - np.amin(yvalues)
+	print "\n"
+	print np.amax(xvalues) - xx
+	print "\n"
+	print np.amax(yvalues) - yy
+	print "\n"
+
 	
 	
 	if (radius>(xx-np.amin(xvalues)) or 
@@ -148,7 +157,7 @@ for k in range(555,755):
 	#	continue
 	
 
-	#print "Hello1 \n"
+	print "Hello1 \n"
 	
 	#Changing indices so that it starts at 0 and not 1
 	#l = l + 1
@@ -166,6 +175,7 @@ for k in range(555,755):
 			rad=(radius-radwindow)+radstep*(j+1)
 			# Step through angles, 5 degree intervals
 			for i in range(0,len(angle)):
+				
 				xrad=math.cos(angle[i])*rad # Find adjacent length (x component)
 				yrad=math.sin(angle[i])*rad # Find opposite length (y component)
 				dx = (xx + xrad) - xvalues
@@ -174,6 +184,7 @@ for k in range(555,755):
 				#val = distance to the closest point 
 				#ind = index of that point
 				# Find point closest to the radius value j for each angle i			
+				
 				val = min(enumerate(dist),key=itemgetter(1))[1]
 				ind = min(enumerate(dist),key=itemgetter(1))[0]
 				#Measure correlation and stick it in an angle x radius matrix
@@ -187,6 +198,7 @@ for k in range(555,755):
 	else:
 		#For loop with j; changes the length scale
 		for j in range(0,radius/radstep):
+			print "Hello2\n"
 			rad = radstep * (j+1)
 			for i in range(0,len(angle)):
 				xrad=math.cos(angle[i])*rad # Find adjacent length (x component)
@@ -197,15 +209,11 @@ for k in range(555,755):
 				#val = distance to the closest point 
 				#ind = index of that point
 				# Find point closest to the radius value j for each angle i			
+				print "Hello3\n"
 				val = min(enumerate(dist),key=itemgetter(1))[1]
 				ind = min(enumerate(dist),key=itemgetter(1))[0]
 				#Measure correlation and stick it in an angle x radius matrix
 				cor[i,j]=np.power(cc-zvalues[ind],2)*0.5
-
-				tempSub = cc - zvalues[ind]
-				tempPower= np.power(tempSub,2)
-				tempMult = tempPower * 0.5
-				temp22 = val
 
 			if (j>0):
 				#Mean of the rows gives 1 column

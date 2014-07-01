@@ -1,0 +1,8 @@
+#!/usr/bin/python
+
+def get_dx_dy(Var,VarRad,VarArray,rad):
+	VarArray = gp.garray(VarArray)
+	VarRad = np.cos(angle[i])*rad
+	VarRad = gp.garray(VarRad)
+	dVar = (Var + VarRad) - VarArray
+	return dVar.as_numpy_array()
