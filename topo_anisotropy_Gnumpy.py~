@@ -16,6 +16,8 @@ from datetime import datetime
 #Function to get dx and dy components
 #Type 0=dx 1=dy
 def get_dx_dy(Var,VarArray,rad,index,Type):
+	Var = gp.garray(Var)
+	
 	VarArray = gp.garray(VarArray)
 
 	if(Type == 0):
@@ -77,7 +79,16 @@ def get_aspect_ratio(SemiminorArray,Semimajor):
 	AspectRatioArray = 1 - ((SemiminorArray**2)/(Semimajor*Semimajor))**0.5
 	return AspectRatioArray.as_numpy_array()
 
+#Function to get the tilt values
+def get_tilt(TempArray,IndexArray,AngleArray):
+	TempArray = gp.garray(TempArray)
+	IndexArray = gp.garray(IndexArray)
 
+	for i in range(0,len(IndexArray)):
+		indVal = IndexArray[i]
+		degVal = math.degrees(AngleArray[indVal])
+		TempArray[0,i] = degVal
+	return TempArray.as_numpy_array()
 	
 	
 #****************************Variables & Array Declarations**********************
@@ -97,6 +108,7 @@ cor = np.array([],dtype='f')
 
 semiminor = np.array([],dtype = 'f')
 tilt = np.array([],dtype = 'f')
+tmpArray = np.array([],dtype = 'f')
 aspect_ratio = np.array([],dtype = 'f')
 coords = np.array([],dtype = 'f')
 
@@ -175,8 +187,10 @@ mean_norm_cor=cor
 #			Array Assignments
 aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
 semiminor = np.zeros((1,radius/radstep))
+tmpArray = np.zeros(shape = (1,radius/radstep))
 tilt = np.zeros((dataSize,radius/radstep))
 coords = np.zeros((dataSize,3))
+
 #**************************************************************
 
 kk_prime=5
@@ -196,18 +210,6 @@ for k in range(555,755):
 	yy=data[k,1]
 	cc=data[k,2]
 	
-	#print "radius is:"
-	#print radius
-	#print "\n"
-	#print xx - xMin
-	#print "\n"
-	#print yy - yMin
-	#print "\n"
-	#print xMax - xx
-	#print "\n"
-	#print yMax - yy
-	#print "\n"
-
 
 	if ((radius>(xx-xMin)) or 
 	(radius>(yy-yMin)) or
@@ -215,9 +217,9 @@ for k in range(555,755):
 	((radius+yy)>yMax)):		
 		continue
 
-	xx = gp.garray(xx)
-	yy = gp.garray(yy)
-	cc = gp.garray(cc)
+	#xx = gp.garray(xx)
+	#yy = gp.garray(yy)
+	#cc = gp.garray(cc)
 	
 	print "Hello\n"
 	if window == 0 :
@@ -279,5 +281,12 @@ for k in range(555,755):
 	semimajor = radius
 	semiminor = get_semiminor(val1,val2,radius)
 	aspect_ratio[l,:] = get_aspect_ratio(semiminor,semimajor)
+	
+	tilt[l,:] = get_tilt(tmpArray,ind,angle)
+	coords[l,:] = [xx,yy,cc]
 	l = l + 1
+
+np.savetxt('aspect_ratio.txt',aspect_ratio)
+np.savetxt('tilt.txt',tilt)
+np.savetxt('coords.txt',coords)
 
