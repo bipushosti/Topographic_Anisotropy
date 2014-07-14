@@ -13,6 +13,8 @@ from datetime import datetime
 from numbapro import guvectorize,vectorize,cuda
 from itertools import izip
 from operator import itemgetter
+import numba
+
 
 #****************************************Function Definitions*********************
 #Function to get dx and dy components
@@ -31,15 +33,24 @@ from operator import itemgetter
 #	return dVarAdd
 
 @vectorize(['float32(float32,float32,float32,float32,float32,float32)'],target = 'gpu')
-def get_dx_dy(VarX,VarY,rad,IndexedAngle,varArrayX,varArrayY):
+def get_dx_dy(VarX,VarY,rad,varArrayX,varArrayY,angle):
 	
-	VarRadx = math.cos(IndexedAngle)*rad
-	VarRady = math.sin(IndexedAngle)*rad
-
+	VarRadx = math.cos(angle)*rad
+	VarRady = math.sin(angle)*rad
+	
 	dVarx = (VarX + VarRadx) - varArrayX
 	dVary = (VarY + VarRady) - varArrayY
 	dist = (dVarx**2 + dVary**2)**0.5
+#	cuda.syncthreads()	
 	return dist
+
+#@guvectorize(['void(int32[:],float32[:],float32[:],float32[:,:])'],'(m),(m),(m)->(m,m)',target='gpu')
+#def get_cor(ind,zvalues,ccJ,cor):
+	#cuda.sync_threads()	
+	#for i in range (0,len(ind)):
+#	ccJ[0]-zvalues[ind]
+
+
 
 
 #Function to get the distance using dx and dy
@@ -58,6 +69,8 @@ def get_row_mean(ValArray,OutArray):
 	tmp = tmp/ValArray.shape[0]
 	OutArray[0] = tmp
 
+
+
 #****************************Variables & Array Declarations**********************
 
 #**Making sure the numpy arrays are float32
@@ -71,6 +84,7 @@ angle = np.array([],dtype=np.float32)
 dx = np.array([],dtype=np.float32)
 dy = np.array([],dtype=np.float32)
 dist = np.array([],dtype=np.float32)
+ind = np.array([],dtype=np.int32)
 
 cor_bi = np.array([],dtype=np.float32)
 cor = np.array([],dtype=np.float32)
@@ -154,12 +168,14 @@ cor_bi = np.float32(cor_bi)
 #			Array Assignments
 
 dist = np.zeros(len(xvalues))
+ind = np.zeros(len(angle))
 aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
 semiminor = np.zeros((1,radius/radstep))
 tmpArray = np.zeros(shape = (1,radius/radstep))
 tilt = np.zeros((dataSize,radius/radstep))
 coords = np.zeros((dataSize,3))
 
+ind.dtype = np.int32
 rad = np.float32()
 xx = np.float32()
 yy = np.float32()
@@ -199,10 +215,9 @@ for k in range(555,755):
 			rad = radstep * (j+1)
 			rad = np.float32(rad)
 			#rad = np.float32(rad)
-			for i in range(0,len(angle)):			
+			#for i in range(0,len(angle)):			
 
-				dist = get_dx_dy(xx,yy,rad,angle[i],xvalues,yvalues)
-				
+			dist = get_dx_dy(xx,yy,rad,xvalues,yvalues,angle)
 		#		dx = get_dx_dy(xx,rad,angle[i],xvalues,0) 
 		#		dy = get_dx_dy(yy,rad,angle[i],yvalues,1) 
 
@@ -215,17 +230,12 @@ for k in range(555,755):
 			
 		#		MANAGE_CUDA_MEMORY = False
 				
-				#val = distance to the closest point ,ind = index of that point
-				# Find point closest to the radius value j for each angle
-				val = min(dist)
-				ind = dist.argmin(axis=0)
-				
-				cor[i,j] = np.power(cc-zvalues[ind],2)*0.5
-				#cor = get_cor(cor,zvalues,ind,cc,i,j)
-				#print cor.dtype
+			ccJ = np.array([cc,j],dtype = np.float32)
+			ind = dist.argmin(axis=1)
+			cor[:,j] = ((cc-zvalues[ind])**2)*0.5
 
-			if (j>0):
-				cor[:,j] = get_row_mean(cor)
-
+		if (j>0):
+			cor[:,j] = get_row_mean(cor)
+			
 print dist
 				
