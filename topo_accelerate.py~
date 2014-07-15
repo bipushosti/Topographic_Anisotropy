@@ -271,8 +271,6 @@ for k in range(555,755):
 	#		val2[i] = cor_bi[ind1[i]-18,radius/radstep -1]
 	
 	semiminor = radius * val1/val2
-
-	
 	
 
 #print cor

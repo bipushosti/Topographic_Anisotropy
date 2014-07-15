@@ -215,11 +215,6 @@ for k in range(555,755):
 				#Measure correlation and stick it in an angle x radius matrix
 				cor[i,j]=np.power(cc-zvalues[ind],2)*0.5
 
-				tempSub = cc - zvalues[ind]
-				tempPower= np.power(tempSub,2)
-				tempMult = tempPower * 0.5
-				temp22 = val
-
 			if (j>0):
 				#Mean of the rows gives 1 column
 				temp = np.array([])

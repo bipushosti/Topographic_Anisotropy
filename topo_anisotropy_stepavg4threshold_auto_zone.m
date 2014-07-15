@@ -18,6 +18,8 @@
 
 % Calculation is currently limited to 5 degree separation of spokes.
 % reducing this will drastically increase computation time.
+tic
+
 window=0;
 radius=1800; radwindow=4000; radstep=900; % measure correlation to radius advancing by radstep
 angle=((0:5:355)*pi/180)'; % 5 degree separation of spokes.
@@ -166,3 +168,4 @@ for k = 556:755
 %     end
 % %     axis([min(x) max(x) min(y) max(y)]); % Here in case you aren't plotting over the topo map
 end
+toc
