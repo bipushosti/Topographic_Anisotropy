@@ -72,16 +72,14 @@ def get_cor_bi(tempArr1,tempArr2):
 
 @guvectorize(['void(float32[:],int64[:],float32[:])'],'(m),(n)->(n)',target='gpu')
 def get_value2(LastCol,index,value2):
+
 	for i in range(0,len(index)):
 		if index[i] <=18:
-			val2 = LastCol[index[i] + 18]
+			Tmpval2 = LastCol[index[i] + 18]
 		else:
-			val2 = LastCol[index[i] - 18]
+			Tmpval2 = LastCol[index[i] - 18]
 	
-	value2[0] = val2
-	#semiminor = radius * val1[0]/valTmp[0]
-	#cuda.syncthreads()
-	#value2 = [valTmp,semiminor]
+	value2[0] = Tmpval2
 #****************************Variables & Array Declarations**********************
 
 #**Making sure the numpy arrays are float32
@@ -263,18 +261,23 @@ for k in range(555,755):
 
 	cor_bi_LastCol = np.array(cor_bi[:,radius/radstep - 1])
 	val2 = get_value2(cor_bi_LastCol,ind1)
-
-	#for i in range(0,len(ind1)):
-	#	if ind1[i] <=18:
-	#		val2[i] = cor_bi[ind1[i]+18,radius/radstep -1]
-	#	else:
-	#		val2[i] = cor_bi[ind1[i]-18,radius/radstep -1]
 	
+	semimajor = radius
 	semiminor = radius * val1/val2
+	aspect_ratio[l,:] = 1 - ((semiminor**2)  / (semimajor**2))**0.5
+	
+	for i in range (0,len(ind1)):
+		indVal = ind1[i]
+		degVal = math.degrees(angle[indVal])
+		tmpArray.put(i,degVal)
 
+	tilt[l,:] = tmpArray
+	coords[l,:] = [xx,yy,cc]
+	l = l + 1
 	
-	
+np.savetxt('aspect_ratio.txt',aspect_ratio)
+np.savetxt('tilt.txt',tilt)
+np.savetxt('coords.txt',coords)	
 
 #print cor
-print ind1.shape[0]
 				
