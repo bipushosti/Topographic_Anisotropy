@@ -30,7 +30,7 @@ int main()
 
 	//Max needed is VARSIZE + 6 as there are 3 spaces between 
 	//vars.But 15 in case the format changes.
-	char line[VARSIZE *3 + 15];
+	char line[VARSIZE *3 +10];
 	memset(line, '\0', sizeof(line));
 	char *startPtr,*endPtr;
 	
@@ -46,33 +46,44 @@ int main()
 	memset(tempZ, '\0', sizeof(tempZ));
 
 	while(fgets(line,VARSIZE*3+10,datTxt)!=NULL) {
-		//printf("%d\n",sizeof(line)/sizeof(char));
+		
+		
 		startPtr = line;
-		for(i=0;i<2;i++) {
-			endPtr = strchr(startPtr,' ');
+		startPtr+=3;
+		printf("%s",startPtr);
+		endPtr = strchr(startPtr,' ');
+
+		for(i=0;i<3;i++) {
 			printf("Hello\n");
 			if(endPtr != NULL) {
 				printf("Hello1\n");
-				if(i==0) {
+				if(i == 0) {
 					strncpy(tempX,startPtr,endPtr-startPtr); 
 					printf("Hello2\n");
 				}
-				else 
+				else if (i == 1) {
+					endPtr = strchr(startPtr,' ');
 					strncpy(tempY,startPtr,endPtr-startPtr); 
 					printf("Hello3\n");
+				}
+				else if (i == 2) {
+					endPtr += 13;
+					if(endPtr != NULL) {
+						strncpy(tempZ,startPtr,endPtr-startPtr); 
+						printf("Hello4\n");
+					}
+				}
 			}
 			
 			endPtr = endPtr + 3;
 			startPtr = endPtr;
 			
-		}
-		break;
-	//	endPtr = strchr(line,'\0');
-	//	if(endPtr != NULL) {
-	//		strncpy(tempZ,startPtr,endPtr-startPtr); 
-	//	}
-
+		}		
 		
+		
+		//break;
+		memset(line, '\0', sizeof(line));
+
 	}	
 
 	//fclose(datTxt);
