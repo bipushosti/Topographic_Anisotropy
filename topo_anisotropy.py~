@@ -150,12 +150,6 @@ for k in range(555,755):
 	(radius+yy)>np.amax(yvalues)):		
 		continue
 	
-	#if (radius>(xx-xvalues.min()) or 
-	#radius>(yy-yvalues.min()) or
-	#(radius+xx)>xvalues.max() or 
-	#(radius+yy)>yvalues.max()):		
-	#	continue
-	
 
 	print "Hello1 \n"
 	

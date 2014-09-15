@@ -1,7 +1,9 @@
 
-#!/usr/bin/python
+
 
 import numpy as np
+from numba import *
+from numbapro import *
 import math
 from math import pi
 from itertools import izip
@@ -9,12 +11,9 @@ from operator import itemgetter
 import scipy.io 
 import math
 import pdb
-import numbapro
-from datetime import datetime
-from numbapro import guvectorize,vectorize,cuda
-from itertools import izip
-from operator import itemgetter
-import numba
+
+
+
 
 
 #****************************************Function Definitions*********************
@@ -33,6 +32,9 @@ import numba
 #	dVarAdd = (Var + VarRad)
 #	return dVarAdd
 
+
+
+
 @vectorize(['float32(float32,float32,float32,float32,float32,float32)'],target = 'gpu')
 def get_dx_dy(VarX,VarY,rad,varArrayX,varArrayY,angle):
 	
@@ -44,6 +46,9 @@ def get_dx_dy(VarX,VarY,rad,varArrayX,varArrayY,angle):
 	dist = (dVarx**2 + dVary**2)**0.5
 #	cuda.syncthreads()	
 	return dist
+
+
+
 
 
 
@@ -78,8 +83,9 @@ def get_value2(LastCol,index,value2):
 			Tmpval2 = LastCol[index[i] + 18]
 		else:
 			Tmpval2 = LastCol[index[i] - 18]
-	
-	value2[0] = Tmpval2
+		value2[i] = Tmpval2
+
+
 #****************************Variables & Array Declarations**********************
 
 #**Making sure the numpy arrays are float32
@@ -89,6 +95,7 @@ xvalues = np.array([],dtype=np.float32)
 yvalues = np.array([],dtype=np.float32)
 zvalues = np.array([],dtype=np.float32)
 
+#Should be int32
 angle = np.array([],dtype=np.float32)
 dx = np.array([],dtype=np.float32)
 dy = np.array([],dtype=np.float32)
@@ -109,6 +116,8 @@ tvaly = np.array([],dtype=np.float32)
 
 val1 = np.array([],dtype=np.float32)
 val2 = np.array([],dtype=np.float32)
+tmpVal2 = np.array([],dtype=np.float32)
+
 
 l=0
 
@@ -178,7 +187,7 @@ cor_bi = np.float32(cor_bi)
 #*************************************************************
 #			Array Assignments
 
-dist = np.zeros(len(xvalues))
+dist = np.zeros(shape = (len(angle),len(xvalues)))
 ind = np.zeros(len(angle))
 aspect_ratio = np.zeros(shape = (dataSize,radius/radstep))
 semiminor = np.zeros((1,radius/radstep))
@@ -187,6 +196,7 @@ tilt = np.zeros((dataSize,radius/radstep))
 coords = np.zeros((dataSize,3))
 val1 = np.zeros(radius/radstep)
 val2 = np.zeros(radius/radstep)
+tmpVal2 = np.zeros(radius/radstep)
 
 ind.dtype = np.int32
 rad = np.float32()
@@ -200,7 +210,7 @@ kk_prime=5
 kk=0
 
 
-
+#for k in range (0,dataSize/4):
 #for k in range(0,dataSize):
 for k in range(555,755):
 	if (k/dataSize *100 >= kk):
@@ -230,41 +240,72 @@ for k in range(555,755):
 			#rad = np.float32(rad)
 			#for i in range(0,len(angle)):			
 
-			dist = get_dx_dy(xx,yy,rad,xvalues,yvalues,angle)
-		#		dx = get_dx_dy(xx,rad,angle[i],xvalues,0) 
-		#		dy = get_dx_dy(yy,rad,angle[i],yvalues,1) 
+			rad=(radius-radwindow)+radstep*(j+1)
+			rad = np.float32(rad)
+#			ArrScalar = np.array([xx,yy,rad],dtype=np.float32)
 
-		#		MANAGE_CUDA_MEMORY = True
-		#		d_dx = cuda.to_device(dx)
-		#		d_dy = cuda.to_device(dy)
-		#		d_dist = cuda.to_device(dist,copy=False)
-		#		get_dist(d_dx,d_dy,dist = d_dist)
-		#		d_dist.copy_to_host(dist)
+#			d_ArrScalar = cuda.to_device(ArrScalar)
+#			d_angle = cuda.to_device(angle)
+#			d_dist = cuda.to_device(dist)
+#			d_xvalues = cuda.to_device(xvalues)
+#			d_yvalues = cuda.to_device(yvalues)
+
+			#get_dist_jit[(41,72),(1024,1)](ArrScalar,d_angle,d_dist,d_xvalues,d_yvalues)
 			
-		#		MANAGE_CUDA_MEMORY = False
-				
+			#dist =  get_dist_jit(xx,yy,rad,angle,dist,varArrayX,varArrayY):
+			dist = get_dx_dy(xx,yy,rad,xvalues,yvalues,angle)		
+
+			#dist = d_dist.copy_to_host()
+
 			ccJ = np.array([cc,j],dtype = np.float32)
 			ind = dist.argmin(axis=1)
 			cor[:,j] = ((cc-zvalues[ind])**2)*0.5
 
 		if (j>0):
 			cor[:,j] = get_row_mean(cor)
+	else:
+		# Step through radii
+		for j in range(0,radius/radstep-((radius-radwindow)/radstep)):
+			# Advance radius length per iteration
+			rad=(radius-radwindow)+radstep*(j+1)
+			rad = np.float32(rad)
+
+			dx = np.zeros((len(angle),dataSize)) 		
+			dx.dtype = np.float32
+			
+			dy = np.zeros((len(angle),dataSize))
+			dy.dtype = np.float32
+
+#		dist = get_dx_dy(xx,yy,rad,xvalues,yvalues,angle)
 	
+			ccJ = np.array([cc,j],dtype = np.float32)
+			ind = dist.argmin(axis=1)
+			cor[:,j] = ((cc-zvalues[ind])**2)*0.5
+
+		if (j>0):
+			cor[:,j] = get_row_mean(cor)
+
+
 	tempArr1 = np.array(cor[0:36])	
 	tempArr2 = np.array(cor[36:len(cor)])
-	#for j in range(0,len(cor_bi)):
-	#	cor_bi[j,:] = (cor[j,:] + cor[j+36,:])/2
 	cor_bi = get_cor_bi(tempArr1,tempArr2)
 	
 	val1 = cor_bi.min(axis=0)
 	ind1 = cor_bi.argmin(axis=0)
 
-	cor_bi_LastCol = np.array(cor_bi[:,radius/radstep - 1])
+	cor_bi_LastCol = np.array(cor_bi[:,radius/radstep-1 ])
+	print cor_bi_LastCol.shape
 	val2 = get_value2(cor_bi_LastCol,ind1)
+	#for i in range(0,len(ind1)):
+	#	if ind1[i] <=18:
+	#		val2 = np.append(val2,cor_bi[ind1[i]+18,radius/radstep - 1])
+	#	else:
+	#		val2 = np.append(val2,cor_bi[ind1[i]-18,radius/radstep -1])
+
 	
 	semimajor = radius
 	semiminor = radius * val1/val2
-	aspect_ratio[l,:] = 1 - ((semiminor**2)  / (semimajor**2))**0.5
+	aspect_ratio[l,:] = 1 - ((semiminor**2)  / (semimajor*semimajor))**0.5
 	
 	for i in range (0,len(ind1)):
 		indVal = ind1[i]
@@ -275,9 +316,9 @@ for k in range(555,755):
 	coords[l,:] = [xx,yy,cc]
 	l = l + 1
 	
-np.savetxt('aspect_ratio.txt',aspect_ratio)
-np.savetxt('tilt.txt',tilt)
-np.savetxt('coords.txt',coords)	
+#np.savetxt('aspect_ratio.txt',aspect_ratio)
+#np.savetxt('tilt.txt',tilt)
+#np.savetxt('coords.txt',coords)	
 
 #print cor
 				
