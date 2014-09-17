@@ -3,13 +3,13 @@
 #include <stdio.h>
 #include <math.h>
 
-#define DATASIZE 	792134
-//The number of chars in x,y or z vars
-#define VARSIZE		13
+#define XSIZE 	1200
+#define YSIZE	800
 
-#define RADIUS		1800
-#define	RADWINDOW	4000
-#define	RADSTEP		900
+
+#define RADIUS		100
+//#define	RADWINDOW	4000
+#define	RADSTEP		1
 #define ANGLESIZE	72	
 
 #define LEFT	9.892e5
@@ -22,15 +22,12 @@
 int main()
 {
 	FILE *datTxt;
-	//Has to be allocated since too big
-	double *x,*y,*z;
-	x = (double *)malloc(sizeof(double) * DATASIZE);
-	y = (double *)malloc(sizeof(double) * DATASIZE);
-	z = (double *)malloc(sizeof(double) * DATASIZE);
+	int data[YSIZE][XSIZE];
 
-	//Max needed is VARSIZE + 6 as there are 3 spaces between 
-	//vars.But 15 in case the format changes.
-	char line[VARSIZE *3 +10];
+	//1200 ints in a row which are max of 5 digits
+	//with a space in the front and the back and space
+	//between each number 
+	char line[1200 * 5 +2+1200];
 	memset(line, '\0', sizeof(line));
 	char *startPtr,*endPtr;
 	
@@ -39,70 +36,93 @@ int main()
 		perror("Cannot open dat.txt file");
 		return (-1);
 	}
-	int i;
-	char tempX[VARSIZE],tempY[VARSIZE],tempZ[VARSIZE];
-	memset(tempX, '\0', sizeof(tempX));
-	memset(tempY, '\0', sizeof(tempY));
-	memset(tempZ, '\0', sizeof(tempZ));
 
-	while(fgets(line,VARSIZE*3+10,datTxt)!=NULL) {
-		
-		
+	int i,j,Value;
+	j = 0;
+	char tempVal[5];
+	memset(tempVal,'\0',sizeof(tempVal));
+
+	while(fgets(line,1200 *5 + 2 + 1200,datTxt)!=NULL) {
+	
 		startPtr = line;
-		startPtr+=3;
-		printf("%s new",startPtr);
-		endPtr = strchr(startPtr,' ');
+		//Skipping the first space
+		startPtr+=1;
+		//printf("%s",startPtr);
 
-		for(i=0;i<3;i++) {
-			printf("Hello\n");
-			if(endPtr != NULL) {
-				printf("Hello1\n");
-				if(i == 0) {
-					strncpy(tempX,startPtr,endPtr-startPtr); 
-					printf("Hello2\n");
-				}
-				else if (i == 1) {
-					endPtr = strchr(startPtr,' ');
-					strncpy(tempY,startPtr,endPtr-startPtr); 
-					printf("Hello3\n");
-				}
-				else if (i == 2) {
-					endPtr += 13;
-					if(endPtr != NULL) {
-						strncpy(tempZ,startPtr,endPtr-startPtr); 
-						printf("Hello4\n");
-					}
-				}
-			}
-			
-			endPtr = endPtr + 3;
-			startPtr = endPtr;
-			
-		}		
 		
-		
-		//break;
-		memset(line, '\0', sizeof(line));
-
+		for(i=0;i<XSIZE;i++) {
+			endPtr = strchr(startPtr,' ');
+			if(endPtr != NULL) {	
+				strncpy(tempVal,startPtr,endPtr-startPtr); 
+				Value = atoi(tempVal);
+				data[j][i] = Value;
+			}	
+			endPtr = endPtr + 1;
+			startPtr = endPtr;	
+		}
+		j++;
 	}	
 
-	//fclose(datTxt);
-/*
+	
+
 	float angle[ANGLESIZE];
 	for(int i=0;i<ANGLESIZE;i++) {
 		angle[i] = i * 5 * PI/180;
-//		printf("%f",angle[i]);
 	}
-	float cor[ANGLESIZE][RADIUS/RADSTEP];
-	float cor_bi[ANGLESIZE/2][ANGLESIZE];
-	//Setting cor to be all zeros
-	memset(cor,0,sizeof(cor[0][0]) * ANGLESIZE * RADIUS/RADSTEP);
-	memset(cor_bi,0,sizeof(cor_bi[0][0])* ANGLESIZE/2 * ANGLESIZE);
-	printf("%f",cor[0][0]);
-*/
+
+
+
+	//double cor[ANGLESIZE][RADIUS/RADSTEP];
+	double** cor;
+	cor = (double**)malloc(ANGLESIZE * sizeof(double*));
+	for(i=0;i<ANGLESIZE;i++) {
+		cor[i] = (double*)malloc(RADIUS/RADSTEP *sizeof(double));
+	}
+
+	
+	double** cor_bi;
+	cor_bi = (double**)malloc(ANGLESIZE/2 * sizeof(double*));
+	for(i=0;i<ANGLESIZE/2;i++) {
+		cor_bi[i] = (double*)malloc(RADIUS/RADSTEP *sizeof(double));
+	}
+
+
+	double*** anisotropy;
+	anisotropy = (double***)malloc(YSIZE * sizeof(double**));
+	for(i = 0;i<YSIZE;i++) {
+		anisotropy[i] = (double**)malloc(XSIZE * sizeof(double *));
+		for(j = 0; j<RADIUS;j++) {
+			anisotropy[i][j] = (double*)malloc(RADIUS * sizeof(double));
+		}
+	}
+	//double anisotropy[YSIZE][XSIZE][RADIUS];
+	//float azimuth[YSIZE][XSIZE][RADIUS];
+
+
 	fclose(datTxt);
-	free(x);
-	free(y);
-	free(z);
+
+	//Freeing matrix cor
+	for(i=0;i<ANGLESIZE;i++){
+		free(cor[i]);
+	}
+	free(cor);
+
+	//Freeing matrix cor_bi
+	for(i=0;i<ANGLESIZE/2;i++){
+		free(cor_bi[i]);
+	}
+	free(cor_bi);
+	
+//	for(i = 0;i<YSIZE;i++) {
+//		for(j=0;j<XSIZE;j++) {
+//			free(anisotropy[i][j]);
+//		}
+//		free(anisotropy[i]);
+//	}
+//	free(anisotropy);
+	
+
+
+
 	return 0;
 }
