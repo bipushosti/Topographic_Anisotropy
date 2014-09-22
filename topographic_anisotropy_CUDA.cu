@@ -2,20 +2,16 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
-#define XSIZE 	1200
-#define YSIZE	800
+#define XSIZE 	1201
+#define YSIZE	801
 
 
 #define RADIUS		100
-//#define	RADWINDOW	4000
 #define	RADSTEP		1
 #define ANGLESIZE	72	
 
-#define LEFT	9.892e5
-#define RIGHT	1.191e6
-#define UP		3.011e6
-#define DOWN	2.85e6
 
 #define PI 3.141592653589793
 
@@ -68,25 +64,32 @@ int main()
 	float angle[ANGLESIZE];
 	for(int i=0;i<ANGLESIZE;i++) {
 		angle[i] = i * 5 * PI/180;
+		//printf("%f\n",angle[i]);
+	}
+	
+
+	//Initializing 2D cmatrix
+	double** cmatrix;
+	cmatrix = (double**)malloc(ANGLESIZE * sizeof(double*));
+	for(i=0;i<ANGLESIZE;i++) {
+		cmatrix[i] = (double*)malloc(RADIUS/RADSTEP *sizeof(double));
 	}
 
-
-
-	//double cor[ANGLESIZE][RADIUS/RADSTEP];
+	//Initializing cor
 	double** cor;
 	cor = (double**)malloc(ANGLESIZE * sizeof(double*));
 	for(i=0;i<ANGLESIZE;i++) {
 		cor[i] = (double*)malloc(RADIUS/RADSTEP *sizeof(double));
 	}
 
-	
+	//Initializing cor_bi
 	double** cor_bi;
 	cor_bi = (double**)malloc(ANGLESIZE/2 * sizeof(double*));
 	for(i=0;i<ANGLESIZE/2;i++) {
 		cor_bi[i] = (double*)malloc(RADIUS/RADSTEP *sizeof(double));
 	}
 
-
+	//Initializing 3D matrix anisotropy
 	double*** anisotropy;
 	anisotropy = (double***)malloc(YSIZE * sizeof(double**));
 	for(i = 0;i<YSIZE;i++) {
@@ -95,9 +98,88 @@ int main()
 			anisotropy[i][j] = (double*)malloc(RADIUS * sizeof(double));
 		}
 	}
-	//double anisotropy[YSIZE][XSIZE][RADIUS];
-	//float azimuth[YSIZE][XSIZE][RADIUS];
 
+	//Initializing 3D matrix anzimuth
+	double*** azimuth;
+	azimuth = (double***)malloc(YSIZE * sizeof(double**));
+	for(i = 0;i<YSIZE;i++) {
+		azimuth[i] = (double**)malloc(XSIZE * sizeof(double *));
+		for(j = 0; j<RADIUS;j++) {
+			azimuth[i][j] = (double*)malloc(RADIUS * sizeof(double));
+		}
+	}
+	
+	
+
+
+	//Actual computation
+	int xrad,yrad,x,y,k,index1,cor_bi_MinInd;
+	double tempCompute,tempSum,cor_bi_ColMin;
+	//for (y=0;y<YSIZE;y++) {
+
+		//if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS + 1))) continue;
+	y = 0;
+	for(x = 0;x<XSIZE+1;x++) {
+		printf("%d\n",y);
+		//printf("Loop1\n");
+		if(x==XSIZE) {
+			y++;
+			if(y==YSIZE){
+				x = XSIZE;
+				continue;
+			}
+			x=0;
+			continue;
+			
+		}
+		
+		if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS + 1))) continue;
+		printf("Loop2\n");
+		if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS + 1))) continue;	
+		printf("Loop3\n");
+
+		for(j = 0;j<RADIUS;j+=RADSTEP) {
+			for(i=0;i<ANGLESIZE;i++) {
+				xrad = (int)cos(angle[i]) * j + x;
+				yrad = (int)sin(angle[i]) * j + y;
+
+				cmatrix[i][j] = data[yrad][xrad]; 
+				tempSum = 0;
+				tempCompute = 0;
+				for(index1 = 0;index1<=j;index1++) {
+					
+					tempCompute = cmatrix[i][index1] - (double)data[y][x];
+					tempCompute  = tempCompute * tempCompute;
+					tempCompute = tempCompute / (2*j);
+					tempSum = tempSum + tempCompute;
+				}
+				cor[i][j] = tempSum;
+				//printf("%d\n",j);
+				
+			}
+	
+			
+			cor_bi_ColMin = DBL_MAX;
+			cor_bi_MinInd = 0;
+		/*	for (k=0;k<(RADIUS/RADSTEP)/2;k++) {
+				cor_bi[k][j] = (cor[k][j] + cor[k+36][j])/2;
+				if(cor_bi[k][j] < cor_bi_ColMin) {
+					cor_bi_ColMin = cor_bi[k][j];
+					cor_bi_MinInd = k;
+					printf("%f,%d\n",cor_bi_ColMin,cor_bi_MinInd);
+					
+				}
+			}*/
+			
+		}
+
+
+		
+	}
+	
+	//}
+
+	//printf("%f",DBL_MAX);
 
 	fclose(datTxt);
 
@@ -113,6 +195,13 @@ int main()
 	}
 	free(cor_bi);
 	
+	//Freeing matrix cmatrix
+	for(i=0;i<ANGLESIZE;i++){
+		free(cmatrix[i]);
+	}
+	free(cmatrix);
+
+	//Freeing 3D matrix anisotropy
 	for(i = 0;i<YSIZE;i++) {
 		for(j=0;j<XSIZE;j++) {
 			free(anisotropy[i][j]);
@@ -120,9 +209,15 @@ int main()
 		free(anisotropy[i]);
 	}
 	free(anisotropy);
+
+	//Freeing 3D matrix azimuth
+	for(i = 0;i<YSIZE;i++) {
+		for(j=0;j<XSIZE;j++) {
+			free(azimuth[i][j]);
+		}
+		free(azimuth[i]);
+	}
+	free(azimuth);
 	
-
-
-
 	return 0;
 }
