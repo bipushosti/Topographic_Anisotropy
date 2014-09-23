@@ -15,7 +15,7 @@
 % Terminate search at minimum correlation. Problem is it yields
 % scale-dependent results. (this one)
 tic
-radius=10; radstep=5; % measure correlation to radius advancing by radstep
+radius=100; radstep=1; % measure correlation to radius advancing by radstep
 % radius=500; radwindow=2e4; radstep=2; % measure correlation to radius advancing by radstep
 angle=((0:5:355)*pi/180)'; % 5 degree separation of spokes.
 % dat=uint16(dat);
@@ -52,6 +52,9 @@ for y=1:length(geotiff_data(:,1))%data by row
                 yrad=sin(angle(i))*rad+y; % Find opposite length (y component)
                 xrad=round(xrad);
                 yrad=round(yrad);
+               % xArr(i)= xrad;
+               % yArr(i)= yrad;
+             
                 %             cor(i,j)=((cc-c(ind)).^2); % Measure correlation and stick it in an angle x radius matrix
                 %             cor(i,j)=((cc-c(ind)).^2)./2; % Measure correlation and stick it in an angle x radius matrix
                 cmatrix(i,j)=double(geotiff_data(yrad,xrad));

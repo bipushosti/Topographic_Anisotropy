@@ -59,12 +59,11 @@ int main()
 		j++;
 	}	
 
-	
 
 	float angle[ANGLESIZE];
 	for(int i=0;i<ANGLESIZE;i++) {
 		angle[i] = i * 5 * PI/180;
-		//printf("%f\n",angle[i]);
+		//printf("%d	::	%f\n",i,angle[i]);
 	}
 	
 
@@ -120,7 +119,7 @@ int main()
 		//if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS + 1))) continue;
 	y = 0;
 	for(x = 0;x<XSIZE+1;x++) {
-		printf("%d\n",y);
+		//printf("%d\n",y);
 		//printf("Loop1\n");
 		if(x==XSIZE) {
 			y++;
@@ -140,36 +139,53 @@ int main()
 
 		for(j = 0;j<RADIUS;j+=RADSTEP) {
 			for(i=0;i<ANGLESIZE;i++) {
-				xrad = (int)cos(angle[i]) * j + x;
-				yrad = (int)sin(angle[i]) * j + y;
+				xrad = (int)round(cos(angle[i]) * (j+1) + x);	//<------------IT WORKS; VERIFIED
+				yrad = (int)round(sin(angle[i]) * (j+1) + y);	//<------------IT WORKS; VERIFIED
+	//			printf("%d) x %d	y %d\n",i+1,xrad,yrad);			
+	//			printf("\t %d %d \n",(int)round(cos(angle[i]) * (j+1) + x),(int)round(sin(angle[i]) * (j+1) + y));
 
-				cmatrix[i][j] = data[yrad][xrad]; 
+				cmatrix[i][j] = (double)data[yrad-1][xrad-1]; 	//<------------IT WORKS; VERIFIED
+	//			printf("%d) xrad %d	yrad %d	data %f	data-1 %f\n",i+1,xrad,yrad,(double)data[yrad][xrad],(double)data[yrad-1][xrad-1]);	
+	//			printf("%d) %f\n",i+1,cmatrix[i][j]);
 				tempSum = 0;
 				tempCompute = 0;
-				for(index1 = 0;index1<=j;index1++) {
-					
-					tempCompute = cmatrix[i][index1] - (double)data[y][x];
+
+				for(index1 = 0;index1<=j;index1++) {					
+					tempCompute = cmatrix[i][index1] - (double)data[y-1][x-1];
+				//	printf("%d,%d	CM %f	DA%f\n",x,y,cmatrix[i][index1],(double)data[y-1][x-1]);
 					tempCompute  = tempCompute * tempCompute;
-					tempCompute = tempCompute / (2*j);
+				//	tempCompute = tempCompute / (2*j);
 					tempSum = tempSum + tempCompute;
+					//printf("%d,i %d,j %d) CM %f	DA %f	TS %f	",index1,i,j,cmatrix[i][index1],(double)data[y][x],tempSum);
 				}
-				cor[i][j] = tempSum;
-				//printf("%d\n",j);
 				
+				cor[i][j] = tempSum/(2*(j+1));
+				//printf("cor %f\n",tempSum/(2*(j+1)));
+				printf("%d) %f\n",i+1,cor[i][j]);
+				//printf("%f \n",tempSum);
 			}
-	
+			return 0;
 			
 			cor_bi_ColMin = DBL_MAX;
 			cor_bi_MinInd = 0;
-			for (k=0;k<(RADIUS/RADSTEP)/2;k++) {
+			for (k=0;k<(ANGLESIZE)/2;k++) {
 				cor_bi[k][j] = (cor[k][j] + cor[k+36][j])/2;
 				if(cor_bi[k][j] < cor_bi_ColMin) {
 					cor_bi_ColMin = cor_bi[k][j];
 					cor_bi_MinInd = k;
-					printf("%f,%d\n",cor_bi_ColMin,cor_bi_MinInd);
-					
+					//printf("%f,%d\n",cor_bi_ColMin,cor_bi_MinInd);	
 				}
+				
 			}
+			int tmp;
+			/*for(k=0;k<72;k++) {
+				for(tmp=0;tmp<100;tmp++) {
+						printf("%f ",cor[k][tmp]);
+				}
+				printf("\n");
+
+			}*/
+			
 			
 		}
 
