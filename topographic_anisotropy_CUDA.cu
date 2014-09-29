@@ -8,6 +8,7 @@
 #define YSIZE	801
 
 
+
 #define RADIUS		100
 #define	RADSTEP		1
 #define ANGLESIZE	72	
@@ -17,7 +18,7 @@
 
 int main()
 {
-	FILE *datTxt;
+	FILE *datTxt,*outputAnisotropy;
 	int data[YSIZE][XSIZE];
 
 	//1200 ints in a row which are max of 5 digits
@@ -29,6 +30,12 @@ int main()
 	
 	datTxt = fopen("dat.txt","r");
 	if(datTxt == NULL) {
+		perror("Cannot open dat.txt file");
+		return (-1);
+	}
+
+	outputAnisotropy = fopen("outputData.txt","w");
+	if(outputAnisotropy == NULL) {
 		perror("Cannot open dat.txt file");
 		return (-1);
 	}
@@ -93,7 +100,7 @@ int main()
 	anisotropy = (double***)malloc(YSIZE * sizeof(double**));
 	for(i = 0;i<YSIZE;i++) {
 		anisotropy[i] = (double**)malloc(XSIZE * sizeof(double *));
-		for(j = 0; j<RADIUS;j++) {
+		for(j = 0; j<XSIZE;j++) {
 			anisotropy[i][j] = (double*)malloc(RADIUS * sizeof(double));
 		}
 	}
@@ -103,7 +110,7 @@ int main()
 	azimuth = (double***)malloc(YSIZE * sizeof(double**));
 	for(i = 0;i<YSIZE;i++) {
 		azimuth[i] = (double**)malloc(XSIZE * sizeof(double *));
-		for(j = 0; j<RADIUS;j++) {
+		for(j = 0; j<XSIZE;j++) {
 			azimuth[i][j] = (double*)malloc(RADIUS * sizeof(double));
 		}
 	}
@@ -113,7 +120,8 @@ int main()
 
 	//Actual computation
 	int xrad,yrad,x,y,k,index1,cor_bi_MinInd;
-	double tempCompute,tempSum,cor_bi_ColMin;
+	double tempCompute,tempSum,cor_bi_ColMin,cor_bi_Ortho;
+	fprintf(outputAnisotropy,"y	x	z	Anisotropy	Azimuth\n");
 	//for (y=0;y<YSIZE;y++) {
 
 		//if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS + 1))) continue;
@@ -133,9 +141,9 @@ int main()
 		}
 		
 		if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS + 1))) continue;
-		printf("Loop2\n");
+		//printf("Loop2\n");
 		if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS + 1))) continue;	
-		printf("Loop3\n");
+		//printf("Loop3\n");
 
 		for(j = 0;j<RADIUS;j+=RADSTEP) {
 			for(i=0;i<ANGLESIZE;i++) {
@@ -145,6 +153,7 @@ int main()
 	//			printf("\t %d %d \n",(int)round(cos(angle[i]) * (j+1) + x),(int)round(sin(angle[i]) * (j+1) + y));
 
 				cmatrix[i][j] = (double)data[yrad-1][xrad-1]; 	//<------------IT WORKS; VERIFIED
+				
 	//			printf("%d) xrad %d	yrad %d	data %f	data-1 %f\n",i+1,xrad,yrad,(double)data[yrad][xrad],(double)data[yrad-1][xrad-1]);	
 	//			printf("%d) %f\n",i+1,cmatrix[i][j]);
 				tempSum = 0;
@@ -153,38 +162,59 @@ int main()
 				for(index1 = 0;index1<=j;index1++) {					
 					tempCompute = cmatrix[i][index1] - (double)data[y-1][x-1];
 				//	printf("%d,%d	CM %f	DA%f\n",x,y,cmatrix[i][index1],(double)data[y-1][x-1]);
-					tempCompute  = tempCompute * tempCompute;
+					tempCompute  = tempCompute * tempCompute ;
 				//	tempCompute = tempCompute / (2*j);
-					tempSum = tempSum + tempCompute;
+					tempSum = (tempSum + tempCompute);
 					//printf("%d,i %d,j %d) CM %f	DA %f	TS %f	",index1,i,j,cmatrix[i][index1],(double)data[y][x],tempSum);
 				}
 				
 				cor[i][j] = tempSum/(2*(j+1));	//<------------IT WORKS; VERIFIED
-				//printf("cor %f\n",tempSum/(2*(j+1)));
-				printf("%d) %f\n",i+1,cor[i][j]);
-				//printf("%f \n",tempSum);
 			}
-			return 0;
+			
 			
 			cor_bi_ColMin = DBL_MAX;
 			cor_bi_MinInd = 0;
+			cor_bi_Ortho = 0;
 			for (k=0;k<(ANGLESIZE)/2;k++) {
-				cor_bi[k][j] = (cor[k][j] + cor[k+36][j])/2;
-				if(cor_bi[k][j] < cor_bi_ColMin) {
+
+				cor_bi[k][j] = (cor[k][j] + cor[k+36][j])/2 ;
+
+				if(cor_bi[k][j] < cor_bi_ColMin) {					//<------------IT WORKS; VERIFIED
 					cor_bi_ColMin = cor_bi[k][j];
 					cor_bi_MinInd = k;
-					//printf("%f,%d\n",cor_bi_ColMin,cor_bi_MinInd);	
+				//	printf("%f,%d\n",cor_bi_ColMin,cor_bi_MinInd);	
 				}
+				//printf("%d) %f\n",k+1,cor_bi[k][j]);
 				
 			}
-			int tmp;
-			/*for(k=0;k<72;k++) {
-				for(tmp=0;tmp<100;tmp++) {
-						printf("%f ",cor[k][tmp]);
-				}
-				printf("\n");
 
-			}*/
+			if(cor_bi_MinInd <18) {								//<------------IT WORKS; VERIFIED
+				cor_bi_Ortho = cor_bi[cor_bi_MinInd + 18][j];
+			}
+			else {
+				cor_bi_Ortho = cor_bi[cor_bi_MinInd - 18][j];
+			}		
+			
+			//Fail safe to ensure there is no nan or inf			
+			if(cor_bi_ColMin == 0) {
+					if((cor_bi_Ortho < 1) && (cor_bi_Ortho > 0)) {
+						cor_bi_ColMin = cor_bi_Ortho;
+					}
+					else {
+						cor_bi_ColMin = 1;
+					}
+			}
+
+			if(cor_bi_Ortho == 0) {
+				cor_bi_Ortho = 1;
+			}
+
+			anisotropy[y][x][j] = cor_bi_Ortho/cor_bi_ColMin;
+			//anisotropy[y][x][j] = cor_bi_Ortho/cor_bi_ColMin;
+			azimuth[y][x][j] = angle[cor_bi_MinInd] * 180/PI ;
+			fprintf(outputAnisotropy,"%d	%d	%d	%f	%f\n",y,x,j,anisotropy[y][x][j],azimuth[y][x][j]);
+			
+			//return 0;
 			
 			
 		}
@@ -198,6 +228,7 @@ int main()
 	//printf("%f",DBL_MAX);
 
 	fclose(datTxt);
+	fclose(outputAnisotropy);
 
 	//Freeing matrix cor
 	for(i=0;i<ANGLESIZE;i++){
