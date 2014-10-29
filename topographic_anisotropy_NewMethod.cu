@@ -10,7 +10,7 @@
 
 #define RADIUS		100
 #define	RADSTEP		1
-#define ANGLESIZE	72	
+#define ANGLESIZE	36	
 
 
 #define PI 3.141592653589793
@@ -89,7 +89,8 @@ int main()
 		
 		j++;
 	}	
-
+	
+	//Fine
 	float angle[ANGLESIZE];
 	for(int i=0;i<ANGLESIZE;i++) {
 		angle[i] = i * 5 * PI/180;
@@ -116,7 +117,7 @@ int main()
 	}
 
 	//Actual computation
-	int xrad,yrad,x,y,xradOrtho,yradOrtho;
+	int xrad,yrad,x,y,xradOrtho,yradOrtho,xradOneEighty,yradOneEighty,valueOneEighty;
 	float variance[100];
 	float orientation[100];
 	float ortho[100];
@@ -149,46 +150,74 @@ int main()
 
 			for(i=0;i<100;i++){
 				variance[i] = FLT_MAX;
+				ortho[i] = FLT_MAX;
 			}
-
+			
+			
 			//Flipped
 			for(i=0;i<ANGLESIZE;i++) {
 				sum_value = 0;
+				sum_valueOrtho = 0;
 				for(j = 0;j<RADIUS;j+=RADSTEP) {
 		
 					xrad = (int)round(cos(angle[i]) * (j+1) + x);	
 					yrad = (int)round(sin(angle[i]) * (j+1) + y);	
 
-
 					value = data[y][x] - data[yrad][xrad];
-					value = (value * value)*0.5;
+					value = value * value * 0.5;
+
+					//sum_value = sum_value + value;
+					//avg_value = sum_value/(j+1);
+
+
+					//Ortho computation
+					xradOrtho = (int)round(cos(angle[i]+PI/2) * (j+1) + x);	
+					yradOrtho = (int)round(sin(angle[i]+PI/2) * (j+1) + y);	
+
+					valueOrtho = data[y][x] - data[yradOrtho][xradOrtho];
+					valueOrtho = valueOrtho * valueOrtho *0.5;
+
+					sum_valueOrtho = sum_valueOrtho + valueOrtho;
+					avg_valueOrtho = sum_valueOrtho/(j+1);
+
 					
-					sum_value = sum_value + value;
-					avg_value = sum_value/(j+1);
+					//One eighty angle computation
+					xradOneEighty = (int)round(cos(angle[i]+PI) * (j+1) + x);	
+					yradOneEighty = (int)round(sin(angle[i]+PI) * (j+1) + y);	
+					
+					valueOneEighty = data[y][x] - data[yradOneEighty][xradOneEighty];
+					valueOneEighty = valueOneEighty * valueOneEighty * 0.5;
+
+					sum_value = sum_value + value + valueOneEighty;
+					avg_value = sum_value/(2*(j+1));
+	
+					//Fail safe to ensure there is no nan or inf			
+					if(avg_value == 0) {
+							if((avg_valueOrtho < 1) && (avg_valueOrtho > 0)) {
+								avg_value = avg_valueOrtho;
+							}
+							else {
+								avg_value = 1;
+							}
+					}
+
+					if(avg_valueOrtho == 0) {
+						avg_valueOrtho = 1;
+					}
+
 
 					//printf("1(%d,%d)	%f	%f\n",(j+1),(i+1),variance[j],avg_value);
 					if(avg_value < variance[j]) {
-					//	printf("2(%d)	%f	%f\n",j,variance[j],avg_value);
-						variance[j] = avg_value;
-						orientation[j] = angle[i];
-
-					//	Ortho computation
-						xradOrtho = (int)round(cos(angle[i]) * (j+1) + x);	
-						yradOrtho = (int)round(sin(angle[i]) * (j+1) + y);	
-
-						valueOrtho = data[y][x] - data[yradOrtho][xradOrtho];
-						valueOrtho = (value * value)*0.5;
-					
-						sum_valueOrtho = sum_valueOrtho + valueOrtho;
-						avg_valueOrtho = sum_valueOrtho/(j+1);
-
-						ortho[j] = avg_valueOrtho;		
+						//	printf("2(%d)	%f	%f\n",j,variance[j],avg_value);
+							variance[j] = avg_value;
+							orientation[j] = angle[i];
+							ortho[j] = avg_valueOrtho;		
 					}	
 				}
 			}
 			
 			for(j=0;j<RADIUS;j+=RADSTEP){
-				anisotropy[y][x][j] = variance[j];
+				anisotropy[y][x][j] = ortho[j]/variance[j];
 				azimuth[y][x][j] = orientation[j] * 180/PI ;
 				
 				//printf("%f	%f\n",variance[j],anisotropy[y][x][j]);	
