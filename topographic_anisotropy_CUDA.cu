@@ -4,6 +4,8 @@
 #include <math.h>
 #include <float.h>
 #include <cuda.h>
+#include <cuda_runtime.h>
+
 
 #define XSIZE 	1201
 #define YSIZE	801
@@ -12,98 +14,124 @@
 
 #define RADIUS		100
 #define	RADSTEP		1
-#define ANGLESIZE	72	
+#define ANGLESIZE	36	
 
 
 #define PI 3.14
 
 //---------------------------Function declarations--------------------------------------------------------------------------//
 
-__global__ void getMatrix(int* data,float* cmatrix,float* cor,float* cor_bi,float* angle,float* anisotropy,float* azimuth);
+__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth);
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
 
 
-__global__ void getMatrix(int* data,float* cmatrix,float* cor,float* cor_bi,float* angle,float* anisotropy,float* azimuth)
+__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth)
 {
-
-	int x = blockIdx.x * blockDim.x + threadIdx.x;
-	int y = blockIdx.y * blockDim.y + threadIdx.y;
-//	int index = col + row * RADIUS/RADSTEP;
-
-	//int x = col + 100;
-	//int y = row + 100;
-	if((y<701)&&(y>100) && (x<1101)&&(x> 100)) {
-
-		int xrad,yrad,i,j,k,index1,cor_bi_MinInd;
-		xrad = 0;
-		yrad = 0;
-
-		//float cmatrix[ANGLESIZE][RADIUS/RADSTEP];
-		//float cor[ANGLESIZE][RADIUS/RADSTEP];
-		//float cor_bi[ANGLESIZE/2][RADIUS/RADSTEP];
-
-
-		float tempSum,tempCompute,cor_bi_ColMin,cor_bi_Ortho;
-
-		for(j = 0;j<RADIUS;j+=RADSTEP) {
-			for(i=0;i<ANGLESIZE;i++) {
-				xrad = (int)round(cosf(angle[i]) * (j+1) + x);	
-				yrad = (int)round(sinf(angle[i]) * (j+1) + y);	
-
-				cmatrix[i * RADIUS/RADSTEP + j] = (float)data[(yrad-1 ) * XSIZE + xrad-1]; 	
-
-				tempSum = 0;
-				tempCompute = 0;
-
-				for(index1 = 0;index1<=j;index1++) {					
-					tempCompute = cmatrix[i * RADIUS/RADSTEP + index1] - (float)data[(y-1) * XSIZE + x-1];
-					tempCompute  = tempCompute * tempCompute ;
-					tempSum = (tempSum + tempCompute);
-				}
-		
-				cor[i * RADIUS/RADSTEP + j] = tempSum/(2*(j+1));	
-			}
 	
-			cor_bi_ColMin = FLT_MAX;
-			cor_bi_MinInd = 0;
-			cor_bi_Ortho = 0;
-			for (k=0;k<(ANGLESIZE)/2;k++) {
+	//Actual computation
+	int xrad,yrad,xradOrtho1,yradOrtho1,xradOneEighty,yradOneEighty,valueOneEighty;
+	int valueOrtho1,valueOrtho2,xradOrtho2,yradOrtho2,i,j;
+	float variance[100];
+	float orientation[100];
+	float ortho[100];
+	float value,sum_value,avg_value;
+	float sum_valueOrtho,avg_valueOrtho;
+	sum_value = 0;
+	avg_value = 0;
+	sum_valueOrtho = 0;
+	avg_valueOrtho = 0;
 
-				cor_bi[k * RADIUS/RADSTEP + j] = (cor[k * RADIUS/RADSTEP + j] + cor[(k+36) * RADIUS/RADSTEP + j])/2 ;
+	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+	//int index = x + y * RADIUS/RADSTEP;
+	
 
-				if(cor_bi[k *RADIUS/RADSTEP + j] < cor_bi_ColMin) {					
-					cor_bi_ColMin = cor_bi[k *RADIUS/RADSTEP + j];
-					cor_bi_MinInd = k;
+//	if((y<701)&&(y>99) && (x<1101)&&(x>99))
+//	if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS))||(x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
+	if((y>(801 - 100 - 1))||(y<(100))||(x>(1201 - 100 - 1))||(x<(100))) return;
+	else
+	{
+
+		printf("X=%d,Y=%d\n",x,y);
+		for(i=0;i<100;i++){
+			variance[i] = FLT_MAX;
+			ortho[i] = FLT_MAX;
+			orientation[i] = FLT_MAX;
+		}
+				
+		//Flipped
+		for(i=0;i<ANGLESIZE;i++) {
+			//Initializing to 0 so that the sum is zero everytime it starts
+			sum_value = 0;
+			sum_valueOrtho = 0;
+			for(j = 0;j<RADIUS;j+=RADSTEP) {
+	
+				//Computation for angle of interest
+				xrad = (int)lrintf(cosf(angle[i]) * (j+1) + x);	
+				yrad = (int)lrintf(sinf(angle[i]) * (j+1) + y);	
+
+				value = data[y * XSIZE + x]  - data[yrad * XSIZE + xrad];
+				value = value * value;
+				
+				//One eighty angle computation
+				xradOneEighty = (int)lrintf(cosf(angle[i]+PI) * (j+1) + x);	
+				yradOneEighty = (int)lrintf(sinf(angle[i]+PI) * (j+1) + y);	
+				
+				valueOneEighty = data[y * XSIZE + x] - data[yradOneEighty * XSIZE + xradOneEighty];
+				valueOneEighty = valueOneEighty * valueOneEighty;
+
+				sum_value = sum_value + value + valueOneEighty;
+				avg_value = sum_value/(2*(j+1)); //the average variance from scale 1 to scale j
+
+				//Computation for values on angle orthogonal to angle of interest
+				xradOrtho1 = (int)lrintf(cosf(angle[i]+PI/2) * (j+1) + x);	
+				yradOrtho1 = (int)lrintf(sinf(angle[i]+PI/2) * (j+1) + y);	
+				
+				valueOrtho1 = data[y * XSIZE + x]  - data[yradOrtho1 * XSIZE + xradOrtho1];
+				valueOrtho1 = valueOrtho1 * valueOrtho1;
+
+				//One eighty ortho angle computation
+				xradOrtho2 = (int)lrintf(cosf(angle[i]+PI*3/2) * (j+1) + x);	
+				yradOrtho2 = (int)lrintf(sinf(angle[i]+PI*3/2) * (j+1) + y);	
+
+				valueOrtho2 = data[y * XSIZE + x]  - data[yradOrtho2 * XSIZE + xradOrtho2];
+				valueOrtho2 = valueOrtho2 * valueOrtho2;
+
+				sum_valueOrtho = sum_valueOrtho + valueOrtho1 + valueOrtho2;
+				avg_valueOrtho = sum_valueOrtho/(2*j+1);
+
+				//Fail safe to ensure there is no nan or inf when taking anisotropy ratio, later on.			
+				if(avg_value == 0) {
+						if((avg_valueOrtho < 1) && (avg_valueOrtho > 0)) {
+							avg_value = avg_valueOrtho;
+						}
+						else {
+							avg_value = 1;
+						}
 				}
-			}
 
-			if(cor_bi_MinInd <18) {								
-				cor_bi_Ortho = cor_bi[(cor_bi_MinInd + 18)* RADIUS/RADSTEP + j];
-			}
-			else {
-				cor_bi_Ortho = cor_bi[(cor_bi_MinInd - 18)*RADIUS/RADSTEP + j];
-			}		
-
-			//Fail safe to ensure there is no nan or inf			
-			if(cor_bi_ColMin == 0) {
-					if((cor_bi_Ortho < 1) && (cor_bi_Ortho > 0)) {
-						cor_bi_ColMin = cor_bi_Ortho;
-					}
-					else {
-						cor_bi_ColMin = 1;
-					}
-			}
-
-			if(cor_bi_Ortho == 0) {
-				cor_bi_Ortho = 1;
+				if(avg_valueOrtho == 0) {
+					avg_valueOrtho = 1;
+				}
+				
+				//Determine if the variance is minimum compared to  others at scale j, if so record it and its angle i. If not, pass it
+				if(avg_value < variance[j]) {
+					//	printf("2(%d)	%f	%f\n",j,variance[j],avg_value);
+						variance[j] = avg_value;
+						orientation[j] = angle[i];
+						ortho[j] = avg_valueOrtho;		
+				}	
 			}
 		}
-		
-		anisotropy[y * YSIZE * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = cor_bi_Ortho/cor_bi_ColMin;
-		azimuth[y * YSIZE * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = angle[cor_bi_MinInd] * 180/PI ;	
-		
+		//__syncthreads();
+		for(j=0;j<RADIUS;j+=RADSTEP){
+			//atomicExch(&anisotropy[y * YSIZE * XSIZE + x * RADIUS/RADSTEP + j], ortho[j]/variance[j]);
+			anisotropy[y * XSIZE * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = ortho[j]/variance[j];
+			azimuth[y * XSIZE * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = orientation[j] * 180/PI;
+			//atomicExch(&azimuth[y * YSIZE * XSIZE + x * RADIUS/RADSTEP + j] , orientation[j] * 180/PI);
+		}
 	}
  
 }
@@ -115,6 +143,12 @@ __global__ void getMatrix(int* data,float* cmatrix,float* cor,float* cor_bi,floa
 
 int main()
 {
+	size_t limit;
+	cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 500 * 1024 * 1024);
+	cudaDeviceGetLimit(&limit,cudaLimitPrintfFifoSize);
+	printf("Limit is %u\n",(unsigned)limit);
+
+
 	FILE *datTxt,*outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
 	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth49,*outputAzimuth99; 
 	int data[YSIZE][XSIZE];
@@ -189,34 +223,13 @@ int main()
 	}	
 	//return 0;
 
+//------------------------------------Matrix Declarations------------------------------------------//
 	float angle[ANGLESIZE];
 	for(int i=0;i<ANGLESIZE;i++) {
 		angle[i] = i * 5 * PI/180;
 		//printf("%d	::	%f\n",i,angle[i]);
 	}
-	
-
-	//Initializing 2D cmatrix
-	float** cmatrix;
-	cmatrix = (float**)malloc(ANGLESIZE * sizeof(float*));
-	for(i=0;i<ANGLESIZE;i++) {
-		cmatrix[i] = (float*)malloc(RADIUS/RADSTEP *sizeof(float));
-	}
-
-	//Initializing cor
-	float** cor;
-	cor = (float**)malloc(ANGLESIZE * sizeof(float*));
-	for(i=0;i<ANGLESIZE;i++) {
-		cor[i] = (float*)malloc(RADIUS/RADSTEP *sizeof(float));
-	}
-
-	//Initializing cor_bi
-	float** cor_bi;
-	cor_bi = (float**)malloc(ANGLESIZE/2 * sizeof(float*));
-	for(i=0;i<ANGLESIZE/2;i++) {
-		cor_bi[i] = (float*)malloc(RADIUS/RADSTEP *sizeof(float));
-	}
-
+/*	
 	//Initializing 3D matrix anisotropy
 	float*** anisotropy;
 	anisotropy = (float***)malloc(YSIZE * sizeof(float**));
@@ -227,6 +240,7 @@ int main()
 		}
 	}
 
+
 	//Initializing 3D matrix anzimuth
 	float*** azimuth;
 	azimuth = (float***)malloc(YSIZE * sizeof(float**));
@@ -236,160 +250,125 @@ int main()
 			azimuth[i][j] = (float*)malloc(RADIUS/RADSTEP * sizeof(float));
 		}
 	}
+
+*/
+	float* anisotropy;
+	anisotropy = (float*)malloc(YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+	float *azimuth;
+	azimuth = (float*)malloc(YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+
+	//anisotropy[0][0][99] = 834;
 	
 	
-
-
-	//Actual computation
-	int xrad,yrad,x,y,k,index1,cor_bi_MinInd;
-	float tempCompute,tempSum,cor_bi_ColMin,cor_bi_Ortho;
-
 //--------------------------------------CUDA-----------------------------------------------------//
 
 
 
-	int* ptrD_data,*ptrH_data;
-	float* ptrD_angle,*ptrD_cmatrix,*ptrD_cor,*ptrD_corbi,*ptrD_azimuth,*ptrD_anisotropy;
-	float *ptrH_anisotropy,*ptrH_azimuth,*ptrH_angle,*ptrH_cor,*ptrH_corbi,*ptrH_cmatrix;
-	ptrH_angle = &angle[0];
-	ptrH_data = &data[0][0];
-	ptrH_cmatrix = &cmatrix[0][0];
-	ptrH_cor = &cor[0][0];
-	ptrH_corbi = &cor_bi[0][0];
-	ptrH_azimuth = &azimuth[0][0][0];
-	ptrH_anisotropy = &anisotropy[0][0][0];
+	int *data_ptr;
+	float *anisotropy_ptr,*azimuth_ptr,*angle_ptr;
+/*
+	float *anisotropy_ptrH;
+	anisotropy_ptrH = &anisotropy[0][0][0];
 
-	cudaMalloc((void**)&ptrD_data,XSIZE * YSIZE * sizeof(int));
-	cudaMalloc((void**)&ptrD_cmatrix,ANGLESIZE * RADIUS/RADSTEP * sizeof(float));
-	cudaMalloc((void**)&ptrD_cor,ANGLESIZE * RADIUS/RADSTEP * sizeof(float));
-	cudaMalloc((void**)&ptrD_corbi,ANGLESIZE/2 * RADIUS/RADSTEP * sizeof(float));
+	float *azimuth_ptrH;
+	azimuth_ptrH = &azimuth[0][0][0];
+*/
 
-	cudaMalloc((void**)&ptrD_angle,ANGLESIZE * sizeof(float));
-	cudaMalloc((void**)&ptrD_azimuth,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
-	cudaMalloc((void**)&ptrD_anisotropy,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+	cudaMalloc((void**)&data_ptr,XSIZE * YSIZE * sizeof(int));
+	cudaMemcpy(data_ptr,data,XSIZE * YSIZE * sizeof(int),cudaMemcpyHostToDevice);
 
-	cudaMemcpy(ptrD_data,ptrH_data,XSIZE * YSIZE * sizeof(int),cudaMemcpyHostToDevice);
-	cudaMemcpy(ptrD_cmatrix,ptrH_cmatrix,ANGLESIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyHostToDevice);
-	cudaMemcpy(ptrD_cor,ptrH_cor,ANGLESIZE *RADIUS/RADSTEP * sizeof(float),cudaMemcpyHostToDevice);
-	cudaMemcpy(ptrD_corbi,ptrH_corbi,ANGLESIZE/2 * RADIUS/RADSTEP * sizeof(float),cudaMemcpyHostToDevice);
-
-	cudaMemcpy(ptrD_azimuth,ptrH_azimuth,YSIZE * XSIZE * sizeof(float),cudaMemcpyHostToDevice);
-	cudaMemcpy(ptrD_anisotropy,ptrH_anisotropy,XSIZE*YSIZE* sizeof(float),cudaMemcpyHostToDevice);
-	cudaMemcpy(ptrD_angle,angle,ANGLESIZE * sizeof(float),cudaMemcpyHostToDevice);
-	printf("Hello\n");
-
-
-	const dim3 gridSize(38,YSIZE,1);
-	const dim3 blockSize(32,1,1);
+	cudaMalloc((void**)&angle_ptr,ANGLESIZE * sizeof(float));
+	cudaMemcpy(angle_ptr,angle,ANGLESIZE * sizeof(float),cudaMemcpyHostToDevice);
 	
-	getMatrix<<<gridSize,blockSize>>>(ptrD_data,ptrD_cmatrix,ptrD_cor,ptrD_corbi,ptrD_angle,ptrD_anisotropy,ptrD_azimuth);
+	cudaMalloc((void**)&anisotropy_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+	cudaMalloc((void**)&azimuth_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+
+
+	printf("Hello1\n");
+
+	dim3 gridSize(3,YSIZE,1);
+	dim3 blockSize(512,1,1);
 
 	printf("Hello2\n");
 
+	getMatrix<<<gridSize,blockSize>>>(data_ptr,angle_ptr,anisotropy_ptr,azimuth_ptr);
 
-	cudaMemcpy(ptrH_azimuth,ptrD_azimuth,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
-	cudaMemcpy(ptrH_anisotropy,ptrD_anisotropy,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
+	cudaDeviceSynchronize();
+	cudaError_t error = cudaGetLastError();
+	if(error != cudaSuccess)
+  	{
+		printf("CUDA Error: %s\n", cudaGetErrorString(error));
 
+    	// we can't recover from the error -- exit the program
+    	return 0;
+  	}
 
 	printf("Hello3\n");
 	
-	printf("Hello4\n");
-//	cudaFree(ptrH_anisotropy);
-//	cudaFree(ptrH_azimuth);
-
-	cudaFree(ptrD_data);
-	cudaFree(ptrD_angle);
-	cudaFree(ptrD_azimuth);
-	cudaFree(ptrD_anisotropy);
+	cudaMemcpy(anisotropy,anisotropy_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
+	cudaMemcpy(azimuth,azimuth_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
 	
-	cudaFree(ptrD_cmatrix);
-	cudaFree(ptrD_cor);
-	cudaFree(ptrD_corbi);
+
+	printf("Hello4\n");
+
+	cudaFree(data_ptr);
+	cudaFree(angle_ptr);
+	cudaFree(azimuth_ptr);
+	cudaFree(anisotropy_ptr);
+	printf("Hello5\n");
 
 //------------------------------------------------------------------------------------------------//
 //			Writing to files
 
-
 /*
-	for(j = 0;j<YSIZE;j++) {
-			for(i=0;i<XSIZE;i++) {
+	for(j=0;j<YSIZE;j++) {
+		for(i=0;i<XSIZE;i++) {
 
-				if (i == (XSIZE - RADIUS - 1)) {
-					fprintf(outputAnisotropy00,"%f\n",anisotropy[i][j][0]);
-				}
-				else {
-					fprintf(outputAnisotropy00,"%f\t",anisotropy[i][j][0]);
-				}
+			if (i == (XSIZE - RADIUS - 1)) {
+				fprintf(outputAnisotropy00,"%f",anisotropy[j][i][0]);
+				fprintf(outputAzimuth00,"%f",azimuth[j][i][0]);
+				fprintf(outputAnisotropy00,"\n");
+				fprintf(outputAzimuth00,"\n");
+
+				fprintf(outputAnisotropy09,"%f",anisotropy[j][i][9]);
+				fprintf(outputAzimuth09,"%f",azimuth[j][i][9]);
+				fprintf(outputAnisotropy09,"\n");
+				fprintf(outputAzimuth09,"\n");
+
+				fprintf(outputAnisotropy49,"%f",anisotropy[j][i][49]);
+				fprintf(outputAzimuth49,"%f",azimuth[j][i][49]);
+				fprintf(outputAnisotropy49,"\n");
+				fprintf(outputAzimuth49,"\n");
+
+				fprintf(outputAnisotropy99,"%f",anisotropy[j][i][99]);
+				fprintf(outputAzimuth99,"%f",azimuth[j][i][99]);
+				fprintf(outputAnisotropy99,"\n");
+				fprintf(outputAzimuth99,"\n");
 			}
-
-	}
-*/
-	printf("Hello5\n");
-
-
-	/*if(j == 0) {
-		if (x == (XSIZE - RADIUS - 1)) {
-			fprintf(outputAnisotropy00,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth00,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy00,"\n");
-			fprintf(outputAzimuth00,"\n");
-		}
-		else {
-			fprintf(outputAnisotropy00,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth00,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy00,"\t");
-			fprintf(outputAzimuth00,"\t");
-		}
-	}
-
-	else if(j == 9) {
-		if (x == (XSIZE - RADIUS - 1)) {
-			fprintf(outputAnisotropy09,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth09,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy09,"\n");
-			fprintf(outputAzimuth09,"\n");
-		}
-		else {
-			fprintf(outputAnisotropy09,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth09,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy09,"\t");
-			fprintf(outputAzimuth09,"\t");
-		}
-	}
-	else if(j == 49) {
+			else {
+				fprintf(outputAnisotropy00,"%f",anisotropy[j][i][0]);
+				fprintf(outputAzimuth00,"%f",azimuth[j][i][0]);
+				fprintf(outputAnisotropy00,"\t");
+				fprintf(outputAzimuth00,"\t");
 	
-		if (x == (XSIZE - RADIUS - 1)) {
-			fprintf(outputAnisotropy49,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth49,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy49,"\n");
-			fprintf(outputAzimuth49,"\n");
-		}
-		else {
-			fprintf(outputAnisotropy49,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth49,"%f",azimuth[y][x][j]);	
-			fprintf(outputAnisotropy49,"\t");
-			fprintf(outputAzimuth49,"\t");
-		}
-	}
-	else if(j == 99) {
-	
-		if (x == (XSIZE - RADIUS - 1)) {
-			fprintf(outputAnisotropy99,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth99,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy99,"\n");
-			fprintf(outputAzimuth99,"\n");
-		}
-		else {
-			fprintf(outputAnisotropy99,"%f",anisotropy[y][x][j]);
-			fprintf(outputAzimuth99,"%f",azimuth[y][x][j]);
-			fprintf(outputAnisotropy99,"\t");
-			fprintf(outputAzimuth99,"\t");
-		}
-	}
+				fprintf(outputAnisotropy09,"%f",anisotropy[j][i][9]);
+				fprintf(outputAzimuth09,"%f",azimuth[j][i][9]);
+				fprintf(outputAnisotropy09,"\t");
+				fprintf(outputAzimuth09,"\t");
 
-	//}
+				fprintf(outputAnisotropy49,"%f",anisotropy[j][i][49]);
+				fprintf(outputAzimuth49,"%f",azimuth[j][i][49]);	
+				fprintf(outputAnisotropy49,"\t");
+				fprintf(outputAzimuth49,"\t");
 
-	//printf("%f",DBL_MAX);
+				fprintf(outputAnisotropy99,"%f",anisotropy[j][i][99]);
+				fprintf(outputAzimuth99,"%f",azimuth[j][i][99]);
+				fprintf(outputAnisotropy99,"\t");
+				fprintf(outputAzimuth99,"\t");	
+			}					
+		}
+	}	
+
 */
 	fclose(datTxt);
 	fclose(inpCheck);
@@ -404,30 +383,7 @@ int main()
 	fclose(outputAzimuth99);
 	
 
-
-	printf("%f\n",anisotropy[0][0][0]);
-
-	//Freeing matrix cor
-	for(i=0;i<ANGLESIZE;i++){
-		free(cor[i]);
-	}
-	free(cor);
-
-	//Freeing matrix cor_bi
-	for(i=0;i<ANGLESIZE/2;i++){
-		free(cor_bi[i]);
-	}
-	free(cor_bi);
-	
-	//Freeing matrix cmatrix
-	for(i=0;i<ANGLESIZE;i++){
-		free(cmatrix[i]);
-	}
-	free(cmatrix);
-
-//------------------Works only when this is commented out!!---------------//
-//------------------Strange as the matrices have to be freed!-------------//
-
+/*
 	//Freeing 3D matrix anisotropy
 	for(i = 0;i<YSIZE;i++) {
 		for(j=0;j<XSIZE;j++) {
@@ -445,9 +401,11 @@ int main()
 		free(azimuth[i]);
 	}
 	free(azimuth);
+*/
+
+	free(anisotropy);
+	free(azimuth);
 
 
-//	free(ptrH_anisotropy);
-//	free(ptrH_azimuth);
 	return 0;
 }
