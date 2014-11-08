@@ -49,8 +49,9 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 	
 
 //	if((y<701)&&(y>99) && (x<1101)&&(x>99))
-//	if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS))||(x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
-	if((y>(801 - 100 - 1))||(y<(100))||(x>(1201 - 100 - 1))||(x<(100))) return;
+	if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS))) return;
+	else if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
+//	if((y>(801 - 100 - 1))||(y<(100))||(x>(1201 - 100 - 1))||(x<(100))) return;
 	else
 	{
 
@@ -128,8 +129,8 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 		//__syncthreads();
 		for(j=0;j<RADIUS;j+=RADSTEP){
 			//atomicExch(&anisotropy[y * YSIZE * XSIZE + x * RADIUS/RADSTEP + j], ortho[j]/variance[j]);
-			anisotropy[y * XSIZE * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = ortho[j]/variance[j];
-			azimuth[y * XSIZE * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = orientation[j] * 180/PI;
+			anisotropy[y * XSIZE  * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = ortho[j]/variance[j];
+			azimuth[y * XSIZE  * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = orientation[j] * 180/PI;
 			//atomicExch(&azimuth[y * YSIZE * XSIZE + x * RADIUS/RADSTEP + j] , orientation[j] * 180/PI);
 		}
 	}
@@ -253,9 +254,9 @@ int main()
 
 */
 	float* anisotropy;
-	anisotropy = (float*)malloc(YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+	anisotropy = (float*)malloc(YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float));
 	float *azimuth;
-	azimuth = (float*)malloc(YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+	azimuth = (float*)malloc(YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float));
 
 	//anisotropy[0][0][99] = 834;
 	
@@ -280,8 +281,8 @@ int main()
 	cudaMalloc((void**)&angle_ptr,ANGLESIZE * sizeof(float));
 	cudaMemcpy(angle_ptr,angle,ANGLESIZE * sizeof(float),cudaMemcpyHostToDevice);
 	
-	cudaMalloc((void**)&anisotropy_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
-	cudaMalloc((void**)&azimuth_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float));
+	cudaMalloc((void**)&anisotropy_ptr,YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float));
+	cudaMalloc((void**)&azimuth_ptr,YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float));
 
 
 	printf("Hello1\n");
@@ -305,8 +306,8 @@ int main()
 
 	printf("Hello3\n");
 	
-	cudaMemcpy(anisotropy,anisotropy_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
-	cudaMemcpy(azimuth,azimuth_ptr,YSIZE * XSIZE * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
+	cudaMemcpy(anisotropy,anisotropy_ptr,YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
+	cudaMemcpy(azimuth,azimuth_ptr,YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost);
 	
 
 	printf("Hello4\n");
@@ -320,56 +321,58 @@ int main()
 //------------------------------------------------------------------------------------------------//
 //			Writing to files
 
-/*
-	for(j=0;j<YSIZE;j++) {
-		for(i=0;i<XSIZE;i++) {
 
-			if (i == (XSIZE - RADIUS - 1)) {
-				fprintf(outputAnisotropy00,"%f",anisotropy[j][i][0]);
-				fprintf(outputAzimuth00,"%f",azimuth[j][i][0]);
+	for(j=0;j<YSIZE ;j++) {
+		for(i=0;i<XSIZE ;i++) {
+			if((j>(YSIZE - RADIUS - 1))||(j<(RADIUS))) continue;
+			if((i>(XSIZE - RADIUS - 1))||(i<(RADIUS))) continue;
+
+			if (i == (XSIZE  - RADIUS - 1)) {
+				fprintf(outputAnisotropy00,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
+				fprintf(outputAzimuth00,"%f",azimuth[j * XSIZE * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 				fprintf(outputAnisotropy00,"\n");
 				fprintf(outputAzimuth00,"\n");
 
-				fprintf(outputAnisotropy09,"%f",anisotropy[j][i][9]);
-				fprintf(outputAzimuth09,"%f",azimuth[j][i][9]);
+				fprintf(outputAnisotropy09,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 9]);
+				fprintf(outputAzimuth09,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 9]);
 				fprintf(outputAnisotropy09,"\n");
 				fprintf(outputAzimuth09,"\n");
 
-				fprintf(outputAnisotropy49,"%f",anisotropy[j][i][49]);
-				fprintf(outputAzimuth49,"%f",azimuth[j][i][49]);
+				fprintf(outputAnisotropy49,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 49]);
+				fprintf(outputAzimuth49,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 49]);
 				fprintf(outputAnisotropy49,"\n");
 				fprintf(outputAzimuth49,"\n");
 
-				fprintf(outputAnisotropy99,"%f",anisotropy[j][i][99]);
-				fprintf(outputAzimuth99,"%f",azimuth[j][i][99]);
+				fprintf(outputAnisotropy99,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 99]);
+				fprintf(outputAzimuth99,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 99]);
 				fprintf(outputAnisotropy99,"\n");
 				fprintf(outputAzimuth99,"\n");
 			}
 			else {
-				fprintf(outputAnisotropy00,"%f",anisotropy[j][i][0]);
-				fprintf(outputAzimuth00,"%f",azimuth[j][i][0]);
+				fprintf(outputAnisotropy00,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
+				fprintf(outputAzimuth00,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 				fprintf(outputAnisotropy00,"\t");
 				fprintf(outputAzimuth00,"\t");
 	
-				fprintf(outputAnisotropy09,"%f",anisotropy[j][i][9]);
-				fprintf(outputAzimuth09,"%f",azimuth[j][i][9]);
+				fprintf(outputAnisotropy09,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 9]);
+				fprintf(outputAzimuth09,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 9]);
 				fprintf(outputAnisotropy09,"\t");
 				fprintf(outputAzimuth09,"\t");
 
-				fprintf(outputAnisotropy49,"%f",anisotropy[j][i][49]);
-				fprintf(outputAzimuth49,"%f",azimuth[j][i][49]);	
+				fprintf(outputAnisotropy49,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 49]);
+				fprintf(outputAzimuth49,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 49]);	
 				fprintf(outputAnisotropy49,"\t");
 				fprintf(outputAzimuth49,"\t");
 
-				fprintf(outputAnisotropy99,"%f",anisotropy[j][i][99]);
-				fprintf(outputAzimuth99,"%f",azimuth[j][i][99]);
+				fprintf(outputAnisotropy99,"%f",anisotropy[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 99]);
+				fprintf(outputAzimuth99,"%f",azimuth[j * XSIZE  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 99]);
 				fprintf(outputAnisotropy99,"\t");
 				fprintf(outputAzimuth99,"\t");	
 			}					
 		}
 	}	
 
-*/
+
 	fclose(datTxt);
 	fclose(inpCheck);
 	fclose(outputAnisotropy00);
