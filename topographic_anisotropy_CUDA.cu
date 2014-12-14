@@ -6,28 +6,38 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#define GPU_MEMSIZE_GB		2
 
-#define XSIZE 	1201
-#define YSIZE	801
+#define GLOBAL_MEM_USE_MB	773
+#define MEM_USE_PER_THREAD_B	1280
+#define MAX_XSIZE_POSSIBLE	floor(((GPU_MEMSIZE_GB * 1000 - GLOBAL_MEM_USE_MB)*1000000)/MEM_USE_PER_THREAD_B) 
+
+//#define XSIZE 		1201
+//#define YSIZE			801
 
 
 
-#define RADIUS		100
-#define	RADSTEP		1
-#define ANGLESIZE	36	
+#define RADIUS			100
+#define	RADSTEP			1
+#define ANGLESIZE		36	
 
 
 #define PI 3.14
 
 //---------------------------Function declarations--------------------------------------------------------------------------//
 
-__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth);
+__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,size_t XSIZE,size_t YSIZE);
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
+//Current Usage:
+//Global Memory: 773 MB
+//Memory per Thread: 1.28 KiloBytes
+//	Thread Memory Usage 	=Total Threads * Memory Per Thread 
+//				= 1001 * 601 * 1.28KB
+//				= 770.05 MB
 
-
-__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth)
+__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,size_t XSIZE,size_t YSIZE)
 {
 	
 	//Actual computation
@@ -45,17 +55,13 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
-	//int index = x + y * RADIUS/RADSTEP;
 	
-
-//	if((y<701)&&(y>99) && (x<1101)&&(x>99))
 	if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS))) return;
 	else if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
-//	if((y>(801 - 100 - 1))||(y<(100))||(x>(1201 - 100 - 1))||(x<(100))) return;
 	else
 	{
 
-		printf("X=%d,Y=%d\n",x,y);
+		
 		for(i=0;i<100;i++){
 			variance[i] = FLT_MAX;
 			ortho[i] = FLT_MAX;
@@ -119,19 +125,15 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 				
 				//Determine if the variance is minimum compared to  others at scale j, if so record it and its angle i. If not, pass it
 				if(avg_value < variance[j]) {
-					//	printf("2(%d)	%f	%f\n",j,variance[j],avg_value);
 						variance[j] = avg_value;
 						orientation[j] = angle[i];
 						ortho[j] = avg_valueOrtho;		
 				}	
 			}
 		}
-		//__syncthreads();
-		for(j=0;j<RADIUS;j+=RADSTEP){
-			//atomicExch(&anisotropy[y * YSIZE * XSIZE + x * RADIUS/RADSTEP + j], ortho[j]/variance[j]);
+		for(j=0;j<RADIUS;j+=RADSTEP){	
 			anisotropy[y * XSIZE  * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = ortho[j]/variance[j];
 			azimuth[y * XSIZE  * RADIUS/RADSTEP + x * RADIUS/RADSTEP + j] = orientation[j] * 180/PI;
-			//atomicExch(&azimuth[y * YSIZE * XSIZE + x * RADIUS/RADSTEP + j] , orientation[j] * 180/PI);
 		}
 	}
  
@@ -144,15 +146,18 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 
 int main()
 {
+	
+	
+
+	//Setting the output buffer to 500MB
 	size_t limit;
 	cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 500 * 1024 * 1024);
 	cudaDeviceGetLimit(&limit,cudaLimitPrintfFifoSize);
-	printf("Limit is %u\n",(unsigned)limit);
 
-
+	//File declarations and opening them
 	FILE *datTxt,*outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
 	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth49,*outputAzimuth99; 
-	int data[YSIZE][XSIZE];
+	
 
 	FILE * inpCheck;
 	inpCheck = fopen("inpCheck.txt","w");
@@ -160,12 +165,7 @@ int main()
 		perror("Cannot open dat.txt file");
 		return (-1);
 	}
-	//1200 ints in a row which are max of 5 digits
-	//with a space in the front and the back and space
-	//between each number 
-	char line[1200 * 5 +2+1200];
-	memset(line, '\0', sizeof(line));
-	char *startPtr,*endPtr;
+	
 	
 	datTxt = fopen("dat.txt","r");
 	if(datTxt == NULL) {
@@ -192,12 +192,59 @@ int main()
 		return (-1);
 	}
 
-	int i,j,Value;
+
+//-----------Getting total rows and columns in the data file---------------------------------------------------------------------------------------------------//
+
+	size_t XSIZE,YSIZE;
+	XSIZE = 0;
+	YSIZE = 0;
+	int i,j;
+
+	//Counting number of columns(x)
+	char* max_line;
+	max_line = (char*)malloc(MAX_XSIZE_POSSIBLE);
+	memset(max_line,'\0',sizeof(max_line));
+
+	fgets(max_line,MAX_XSIZE_POSSIBLE,datTxt)!=NULL; 
+	while(*max_line)if(*max_line++ == ' ')++XSIZE;
+	XSIZE+=1;
+	
+	
+
+
+	//Counting number of rows(y)
+	do{
+		i = fgetc(datTxt);
+		if(i == '\n') YSIZE++;
+	}while(i != EOF);
+	YSIZE+=1;
+
+//-----------------------Checking if the data size fits the memory of the GPU----------------------------------------------------------------------------------------//
+
+	//printf("(XSIZE,YSIZE):(%zd,%zd)\n",XSIZE,YSIZE);
+	//printf("Maximum size possible = %f\nTotal size of current data(XSIZE * YSIZE) = %zd\n",MAX_XSIZE_POSSIBLE,XSIZE * YSIZE);
+	//(MAX_XSIZE_POSSIBLE - XSIZE*YSIZE >0)? printf("There is enough memory for the computation\n"):printf("There is not enough memory and may result in incorrect results\n");
+
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
+
+	int data[YSIZE][XSIZE];
+
+	//XSIZE ints in a row which are max of 5 digits
+	//with a space in the front and the back and space
+	//between each number 
+	char *startPtr,*endPtr;
+	char line[XSIZE * 5 +2+XSIZE];
+	memset(line, '\0', sizeof(line));
+	int Value;
+	i = 0;
 	j = 0;
+	//Assuming each number in the data set has a max of 5 characters
 	char tempVal[5];
 	memset(tempVal,'\0',sizeof(tempVal));
 
-	while(fgets(line,1200 *5 + 2 + 1200,datTxt)!=NULL) {	
+
+	//return 0;
+	while(fgets(line,XSIZE *5 + 2 + XSIZE,datTxt)!=NULL) {	
 		startPtr = line;	
 		for(i=0;i<XSIZE;i++) {
 			Value = 0;
@@ -222,37 +269,15 @@ int main()
 		
 		j++;
 	}	
-	//return 0;
-
-//------------------------------------Matrix Declarations------------------------------------------//
+	
+	
+//------------------------------------Matrix Declarations--------------------------------------------------------------------------------------------------------------//
 	float angle[ANGLESIZE];
 	for(int i=0;i<ANGLESIZE;i++) {
 		angle[i] = i * 5 * PI/180;
 		//printf("%d	::	%f\n",i,angle[i]);
 	}
-/*	
-	//Initializing 3D matrix anisotropy
-	float*** anisotropy;
-	anisotropy = (float***)malloc(YSIZE * sizeof(float**));
-	for(i = 0;i<YSIZE;i++) {
-		anisotropy[i] = (float**)malloc(XSIZE * sizeof(float *));
-		for(j = 0; j<XSIZE;j++) {
-			anisotropy[i][j] = (float*)malloc(RADIUS/RADSTEP * sizeof(float));
-		}
-	}
 
-
-	//Initializing 3D matrix anzimuth
-	float*** azimuth;
-	azimuth = (float***)malloc(YSIZE * sizeof(float**));
-	for(i = 0;i<YSIZE;i++) {
-		azimuth[i] = (float**)malloc(XSIZE * sizeof(float *));
-		for(j = 0; j<XSIZE;j++) {
-			azimuth[i][j] = (float*)malloc(RADIUS/RADSTEP * sizeof(float));
-		}
-	}
-
-*/
 	float* anisotropy;
 	anisotropy = (float*)malloc(YSIZE  * XSIZE  * RADIUS/RADSTEP * sizeof(float));
 	float *azimuth;
@@ -261,7 +286,7 @@ int main()
 	//anisotropy[0][0][99] = 834;
 	
 	
-//--------------------------------------CUDA-----------------------------------------------------//
+//--------------------------------------CUDA-------------------------------------------------------------------------------------------------------------------------//
 
 
 
@@ -292,7 +317,7 @@ int main()
 
 	printf("Hello2\n");
 
-	getMatrix<<<gridSize,blockSize>>>(data_ptr,angle_ptr,anisotropy_ptr,azimuth_ptr);
+	getMatrix<<<gridSize,blockSize>>>(data_ptr,angle_ptr,anisotropy_ptr,azimuth_ptr,XSIZE,YSIZE);
 
 	cudaDeviceSynchronize();
 	cudaError_t error = cudaGetLastError();
@@ -318,7 +343,7 @@ int main()
 	cudaFree(anisotropy_ptr);
 	printf("Hello5\n");
 
-//------------------------------------------------------------------------------------------------//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //			Writing to files
 
 
@@ -386,29 +411,19 @@ int main()
 	fclose(outputAzimuth99);
 	
 
-/*
-	//Freeing 3D matrix anisotropy
-	for(i = 0;i<YSIZE;i++) {
-		for(j=0;j<XSIZE;j++) {
-			free(anisotropy[i][j]);
-		}
-		free(anisotropy[i]);
-	}
-	free(anisotropy);
-
-	//Freeing 3D matrix azimuth
-	for(i = 0;i<YSIZE;i++) {
-		for(j=0;j<XSIZE;j++) {
-			free(azimuth[i][j]);
-		}
-		free(azimuth[i]);
-	}
-	free(azimuth);
-*/
-
+	
+	//free(max_line);
 	free(anisotropy);
 	free(azimuth);
 
+	size_t free_byte ;
 
+	size_t total_byte ;
+
+	cudaMemGetInfo( &free_byte, &total_byte );
+	double free_db = (double)free_byte;
+	double total_db = (double)total_byte;
+	double used_db = total_db - free_db;
+	printf("GPU memory usage: used = %f, free = %f MB, total = %f MB\n",used_db/1024.0/1024.0, free_db/1024.0/1024.0, total_db/1024.0/1024.0);
 	return 0;
 }
