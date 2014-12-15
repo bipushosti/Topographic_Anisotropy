@@ -155,7 +155,7 @@ int main()
 	cudaDeviceGetLimit(&limit,cudaLimitPrintfFifoSize);
 
 	//File declarations and opening them
-	FILE *datTxt,*outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
+	FILE *datTxt1,*datTxt,*outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
 	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth49,*outputAzimuth99; 
 	
 
@@ -167,12 +167,11 @@ int main()
 	}
 	
 	
-	datTxt = fopen("dat.txt","r");
-	if(datTxt == NULL) {
-		perror("Cannot open dat.txt file");
-		return (-1);
+	datTxt1 = fopen("dat.txt","r");
+	if(datTxt1 == NULL) {
+		printf("Cannot open dat.txt file\n");
+		exit(1);
 	}
-
 	outputAnisotropy00 = fopen("outputDataAni00.txt","w");
 	outputAnisotropy09 = fopen("outputDataAni09.txt","w");
 	outputAnisotropy49 = fopen("outputDataAni49.txt","w");
@@ -195,7 +194,7 @@ int main()
 
 //-----------Getting total rows and columns in the data file---------------------------------------------------------------------------------------------------//
 
-	size_t XSIZE,YSIZE;
+	int XSIZE,YSIZE;
 	XSIZE = 0;
 	YSIZE = 0;
 	int i,j;
@@ -205,7 +204,7 @@ int main()
 	max_line = (char*)malloc(MAX_XSIZE_POSSIBLE);
 	memset(max_line,'\0',sizeof(max_line));
 
-	fgets(max_line,MAX_XSIZE_POSSIBLE,datTxt)!=NULL; 
+	fgets(max_line,MAX_XSIZE_POSSIBLE,datTxt1)!=NULL; 
 	while(*max_line)if(*max_line++ == ' ')++XSIZE;
 	XSIZE+=1;
 	
@@ -214,14 +213,21 @@ int main()
 
 	//Counting number of rows(y)
 	do{
-		i = fgetc(datTxt);
+		i = fgetc(datTxt1);
 		if(i == '\n') YSIZE++;
 	}while(i != EOF);
 	YSIZE+=1;
+	
+	fclose(datTxt1);
 
+	datTxt = fopen("dat.txt","r");
+	if(datTxt == NULL) {
+		printf("Cannot open dat.txt file\n");
+		exit(1);
+	}
 //-----------------------Checking if the data size fits the memory of the GPU----------------------------------------------------------------------------------------//
 
-	//printf("(XSIZE,YSIZE):(%zd,%zd)\n",XSIZE,YSIZE);
+	printf("(XSIZE,YSIZE):(%d,%d)\n",XSIZE,YSIZE);
 	//printf("Maximum size possible = %f\nTotal size of current data(XSIZE * YSIZE) = %zd\n",MAX_XSIZE_POSSIBLE,XSIZE * YSIZE);
 	//(MAX_XSIZE_POSSIBLE - XSIZE*YSIZE >0)? printf("There is enough memory for the computation\n"):printf("There is not enough memory and may result in incorrect results\n");
 
@@ -233,7 +239,7 @@ int main()
 	//with a space in the front and the back and space
 	//between each number 
 	char *startPtr,*endPtr;
-	char line[XSIZE * 5 +2+XSIZE];
+	char line[(XSIZE-1) * 5 +2+(XSIZE-1)];
 	memset(line, '\0', sizeof(line));
 	int Value;
 	i = 0;
@@ -242,9 +248,9 @@ int main()
 	char tempVal[5];
 	memset(tempVal,'\0',sizeof(tempVal));
 
-
-	//return 0;
-	while(fgets(line,XSIZE *5 + 2 + XSIZE,datTxt)!=NULL) {	
+	printf("Working1\n");
+	while(fgets(line,(XSIZE-1) *5 + 2 + (XSIZE-1),datTxt)!=NULL) {	
+		printf("Working2\n");
 		startPtr = line;	
 		for(i=0;i<XSIZE;i++) {
 			Value = 0;
@@ -255,6 +261,7 @@ int main()
 				Value = atoi(tempVal);
 				data[j][i] = Value;
 				fprintf(inpCheck,"%d ",Value);
+				printf("%d\n",Value);
 
 				endPtr = endPtr + 1;
 				startPtr = endPtr;
