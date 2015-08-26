@@ -469,7 +469,7 @@ int main(int argc,char* argv[])
 //---------------Initialization of data arrays for each GPU---------// 
 		//Initially pos = 0 and offset = 0 so "if" statement is unnecessary
 
-		for(j=0;j<ANGLESIZE;j++) {
+		for(int j=0;j<ANGLESIZE;j++) {
 			GPU_values[i].h_angle[j] = j * 5 * PI/180;		
 		}
 
