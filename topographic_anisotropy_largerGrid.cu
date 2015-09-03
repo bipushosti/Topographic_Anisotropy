@@ -362,7 +362,7 @@ int main(int argc,char* argv[])
 
 	printf("Working1\n");
 	while(fgets(line,XSIZE *10 + 2 + (XSIZE-1),datTxt)!=NULL) {	
-		printf("Working2\n");
+		//printf("Working2\n");
 		startPtr = line;	
 		for(i=0;i<XSIZE;i++) {
 			Value = 0;
@@ -414,8 +414,11 @@ int main(int argc,char* argv[])
 	tmpSize = YSIZE;
 	count = DeviceCount;
 
+	printf("Tmpsize = %zd,Device Count = %d\n",tmpSize,DeviceCount);
 	//Iterating through all the available devices
 	for(i = 0;i<DeviceCount;i++){
+
+		printf("\n########################Device %d #############################\n",i);
 
 		if(tmpSize % count != 0){
 			GPU_values[i].NumRows = (tmpSize/count) + 1;
@@ -434,11 +437,13 @@ int main(int argc,char* argv[])
 		size_orig = GPU_values[i].NumRows * XSIZE * RADIUS/RADSTEP *sizeof(float);
 
 		if((i == 0) ||(i == (DeviceCount -1))){
-			size = (GPU_values[i].NumRows + RADIUS) * XSIZE * sizeof(float);	
+			size = (GPU_values[i].NumRows + RADIUS ) * XSIZE * sizeof(float);	
 
 			//Setting the offset into the data matrix
 			if(i == 0){
 				offset = 0;
+			}else if(i == (DeviceCount - 1)){
+				offset = RADIUS * -1;
 			}
 		//Sections in between
 		}else{
@@ -481,22 +486,39 @@ int main(int argc,char* argv[])
 
 		printf("The size of the array is %d\n",sizeof(GPU_values[i].h_data));
 
-		data_position = (pos + offset) * XSIZE;
+		//if(i == 0){		
+			data_position = (pos + offset) * XSIZE;
+		//}else{
+		//	data_position = (pos + offset + 1) * XSIZE;
+		//}
 		
 		printf("pos = %d,data_position after sub Index = %zd\n",pos,data_position);
 		//Initializing the data arrays in each of the gpu with portions of the main data
-		for(j=0;j<total_data;j++){
+		for(j=0;j<(total_data);j++){
 			GPU_values[i].h_data[j] = data[data_position+j];
-			//if(j!=0 && j % 501 == 0) printf("\n");
-			//printf("%d ",GPU_values[i].h_data[j]);			
+			//if(i==1){
+				//if(j!=0 && j % 501 == 0) printf("\n");
+				//printf("%d ",GPU_values[i].h_data[j]);			
+			//}
 		}
+		
+		for(j=0;j<(total_data);j++){
+				if((j!=0) && (j % 501 == 0)) printf("\n");
+				printf("%d ",GPU_values[i].h_data[j]);			
+			
+		}
+		printf("\n\n\n\n\n\n");
+		
+
+
+
 		printf("Data array assigned \n");
 		offset = RADIUS * -1;
-		if(i == 0) {
+		//if(i == 0) {
+		//	pos+=GPU_values[i].NumRows;
+		//}else {
 			pos+=GPU_values[i].NumRows;
-		}else {
-			pos+=GPU_values[i].NumRows;
-		}
+		//}
 	}
 	printf("Working3\n");
 	
