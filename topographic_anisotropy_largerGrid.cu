@@ -459,7 +459,8 @@ int main(int argc,char* argv[])
 
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_anisotropy,size_orig));
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_azimuth,size_orig));
-		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_data,size));
+		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_data,size));	
+		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_angle,angle_bytes));
 		printf("Cuda Malloc to GPU possible \n");
 
 
@@ -550,6 +551,7 @@ int main(int argc,char* argv[])
 	}
 //------------------------------------Freeing data-----------------------------------------------------------------------//
 	for(i=0;i<DeviceCount;i++){
+		HANDLE_ERROR(cudaSetDevice(i));
 		HANDLE_ERROR(cudaFreeHost(GPU_values[i].h_anisotropy));
 		HANDLE_ERROR(cudaFreeHost(GPU_values[i].h_azimuth));
 		HANDLE_ERROR(cudaFreeHost(GPU_values[i].h_data));
@@ -559,6 +561,9 @@ int main(int argc,char* argv[])
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_anisotropy));
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_azimuth));
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_data));
+		
+		HANDLE_ERROR(cudaStreamDestroy(GPU_values[i].stream));
+		cudaDeviceReset();
 	}
 
 	fclose(datTxt);
