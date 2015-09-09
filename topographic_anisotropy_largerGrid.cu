@@ -9,6 +9,7 @@
 #include <float.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <assert.h>
 #include "topographic_anisotropy_largerGrid.h"
 
 #define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
@@ -44,6 +45,7 @@
 __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,int XSIZE,int YSIZE);
 int Get_GPU_devices();
 static void HandleError(cudaError_t err,const char *file, int line);
+inline cudaError_t checkCuda(cudaError_t result);
 //--------------------------------------------------------------------------------------------------------------------------//
 
 //Current Usage:
@@ -189,7 +191,14 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 
 //--------------------------------------END OF KERNEL-----------------------------------------------------------//
 
-
+inline cudaError_t checkCuda(cudaError_t result)
+{
+	if(result != cudaSuccess){
+		fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
+        	assert(result == cudaSuccess);
+	}
+	return result;
+}
 //--------------------------------------Handle Error()-----------------------------------------------------------//
 
 static void HandleError( cudaError_t err,const char *file, int line ) {
@@ -410,6 +419,8 @@ int main(int argc,char* argv[])
 	size_t data_position = 0;
 	//Store the total size of the angle array in bytes
 	size_t angle_bytes = ANGLESIZE * sizeof(float);
+	//Stores the number of elements
+	size_t total_data = 0;
 
 	tmpSize = YSIZE;
 	count = DeviceCount;
@@ -440,15 +451,16 @@ int main(int argc,char* argv[])
 			size = (GPU_values[i].NumRows + RADIUS ) * XSIZE * sizeof(float);	
 
 			//Setting the offset into the data matrix
-			if(i == 0){
-				offset = 0;
-			}else if(i == (DeviceCount - 1)){
-				offset = RADIUS * -1;
-			}
+			//if(i == 0){
+			//	offset = 0;
+			//}else if(i == (DeviceCount - 1)){
+			//	offset = RADIUS * -1;
+			//}
+				
 		//Sections in between
 		}else{
 			size = (GPU_values[i].NumRows + 2*RADIUS) * XSIZE * sizeof(float);
-			offset = RADIUS * -1;
+			//offset = RADIUS * -1;
 		}
 		
 		printf("Size is: GPU_values[%zd].NumRows + RADIUS = (%d + %d )*%d *%d =  %ld\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),size);
@@ -459,15 +471,20 @@ int main(int argc,char* argv[])
 
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_anisotropy,size_orig));
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_azimuth,size_orig));
-		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_data,size));	
+		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_data,size/sizeof(float) *sizeof(int)));	
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_angle,angle_bytes));
 		printf("Cuda Malloc to GPU possible \n");
 
-
+/*
 		HANDLE_ERROR(cudaMallocHost((void**)&GPU_values[i].h_anisotropy,size_orig));
 		HANDLE_ERROR(cudaMallocHost((void**)&GPU_values[i].h_azimuth,size_orig));
 		HANDLE_ERROR(cudaMallocHost((void**)&GPU_values[i].h_data,size));
 		HANDLE_ERROR(cudaMallocHost((void**)&GPU_values[i].h_angle,angle_bytes));	
+*/
+		HANDLE_ERROR(cudaHostAlloc((void**)&GPU_values[i].h_anisotropy,size_orig,cudaHostAllocPortable));
+		HANDLE_ERROR(cudaHostAlloc((void**)&GPU_values[i].h_azimuth,size_orig,cudaHostAllocPortable));
+		HANDLE_ERROR(cudaHostAlloc((void**)&GPU_values[i].h_data,size/sizeof(float) *sizeof(int),cudaHostAllocPortable));
+		HANDLE_ERROR(cudaHostAlloc((void**)&GPU_values[i].h_angle,angle_bytes,cudaHostAllocPortable));	
 
 		printf("Cuda Malloc to CPU possible \n");
 
@@ -480,35 +497,34 @@ int main(int argc,char* argv[])
 		}
 
 
-		size_t total_data;
+		total_data = 0;
 		total_data = size/sizeof(float);
 
 		printf("Total data size is %ld\n",total_data);
 
 		printf("The size of the array is %d\n",sizeof(GPU_values[i].h_data));
+		
+		data_position = (pos + offset ) * XSIZE;
 
-		//if(i == 0){		
-			data_position = (pos + offset) * XSIZE;
-		//}else{
-		//	data_position = (pos + offset + 1) * XSIZE;
-		//}
+
 		
 		printf("pos = %d,data_position after sub Index = %zd\n",pos,data_position);
 		//Initializing the data arrays in each of the gpu with portions of the main data
 		for(j=0;j<(total_data);j++){
 			GPU_values[i].h_data[j] = data[data_position+j];
 			//if(i==1){
-				//if(j!=0 && j % 501 == 0) printf("\n");
-				//printf("%d ",GPU_values[i].h_data[j]);			
+//				if(j!=0 && j % 501 == 0) printf("\n");
+//				printf("%d ",GPU_values[i].h_data[j]);			
 			//}
+			printf("%d\n",data[data_position+j]);
 		}
 		
-		for(j=0;j<(total_data);j++){
-				if((j!=0) && (j % 501 == 0)) printf("\n");
-				printf("%d ",GPU_values[i].h_data[j]);			
+		//for(j=0;j<(total_data);j++){
+		//		if((j!=0) && (j % 501 == 0)) printf("\n");
+		//		printf("%d ",GPU_values[i].h_data[j]);			
 			
-		}
-		printf("\n\n\n\n\n\n");
+		//}
+		//printf("\n\n\n\n\n\n");
 		
 
 
@@ -551,7 +567,9 @@ int main(int argc,char* argv[])
 	}
 //------------------------------------Freeing data-----------------------------------------------------------------------//
 	for(i=0;i<DeviceCount;i++){
+
 		HANDLE_ERROR(cudaSetDevice(i));
+
 		HANDLE_ERROR(cudaFreeHost(GPU_values[i].h_anisotropy));
 		HANDLE_ERROR(cudaFreeHost(GPU_values[i].h_azimuth));
 		HANDLE_ERROR(cudaFreeHost(GPU_values[i].h_data));
@@ -561,7 +579,8 @@ int main(int argc,char* argv[])
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_anisotropy));
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_azimuth));
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_data));
-		
+		HANDLE_ERROR(cudaFree(GPU_values[i].d_angle));
+
 		HANDLE_ERROR(cudaStreamDestroy(GPU_values[i].stream));
 		cudaDeviceReset();
 	}
