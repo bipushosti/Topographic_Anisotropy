@@ -460,7 +460,7 @@ int main(int argc,char* argv[])
 		pos+=GPU_values[i].NumRows;	
 	}
 
-/*
+
 	for(i=0;i<DeviceCount;i++){
 		
 		HANDLE_ERROR(cudaSetDevice(i));
@@ -475,7 +475,7 @@ int main(int argc,char* argv[])
 		dim3 blockSize(THREADS_PER_BLOCK,1,1);
 
 		//----------------Launching the Kernel---------------------//
-		getMatrix<<<gridSize,blockSize,0,GPU_values[i].stream>>>(GPU_values[i].d_data,GPU_values[i].d_angle,GPU_values[i].d_anisotropy,GPU_values[i].d_azimuth,XSIZE,YSIZE);
+		getMatrix<<<gridSize,blockSize,0,GPU_values[i].stream>>>(GPU_values[i].d_data,GPU_values[i].d_angle,GPU_values[i].d_anisotropy,GPU_values[i].d_azimuth,GPU_values[i].NumCols,GPU_values[i].NumRows);
 
 		//HANDLE_ERROR(cudaDeviceSynchronize());
 
@@ -484,7 +484,7 @@ int main(int argc,char* argv[])
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_azimuth,GPU_values[i].d_azimuth,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
 	}
 
-*/
+
 
 	for(i=0;i<DeviceCount;i++){
 		//------------------------------------Freeing data---------------------------------------//
