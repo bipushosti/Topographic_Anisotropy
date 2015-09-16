@@ -68,7 +68,9 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 //----------------------------------------------------------------------------------------------------------------------------//	
-	if((y>(YSIZE - RADIUS - 1))||(y<(RADIUS))) return;
+
+	//y>YSIZE - 1 for multi-gpu code because the computation needs to be done upto the radius
+	if((y>(YSIZE - 1))||(y<(RADIUS))) return;
 	else if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
 	else
 	{
