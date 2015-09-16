@@ -11,8 +11,10 @@
 #include <float.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <helper_functions.h>
+#include <helper_cuda.h>
 #include <assert.h>
-#include "topographic_anisotropy_largerGrid.h"
+#include "test.h"
 
 #define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
@@ -32,7 +34,8 @@
 
 
 //Always have even number of radius;and divisible by 10
-#define RADIUS			100
+#define RADIUS			20
+
 #define	RADSTEP			1
 #define ANGLESIZE		36	//Size of angle array	
 
@@ -40,6 +43,8 @@
 
 
 #define THREADS_PER_BLOCK	512
+
+//__constant__ int RADIUS;
 
 //#define FILENAME	"Annie_coastDEM.txt"
 //---------------------------Function declarations--------------------------------------------------------------------------//
@@ -53,6 +58,12 @@ inline cudaError_t checkCuda(cudaError_t result);
 __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,int XSIZE,int YSIZE)
 {
 
+	//The kernel does not use the new definition of RADIUS in main but the one at the top of the file
+	//Therefore the define at the top and the input value of RADIUS must be equal (For now)
+
+	//printf("The RADIUS is: %d\n",RADIUS);
+	
+
 //	Thread indices
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -61,7 +72,7 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 	else if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
 	else
 	{
-		//printf("%d,%d\n",XSIZE,YSIZE);
+		//printf("%d,%d\n",y,x);
 		//Actual computation
 		int xrad,yrad,xradOrtho1,yradOrtho1,xradOneEighty,yradOneEighty,valueOneEighty;
 		int valueOrtho1,valueOrtho2,xradOrtho2,yradOrtho2,i,j;
@@ -224,16 +235,20 @@ int main(int argc,char* argv[])
 //int main()
 {
 
+	
 
 	if(argc == 1){
 		printf("Not enough arguments\n");
 		return 0;
 	}
-		
-
-
 	#undef RADIUS
 	#define RADIUS atoi(argv[2])
+
+	
+	
+	//RADIUS = tmp;
+
+	printf("Radius is %ld\n",RADIUS);
 	//Setting the output buffer to 500MB
 	size_t limit;
 	cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 500 * 1024 * 1024);
@@ -241,7 +256,8 @@ int main(int argc,char* argv[])
 
 	//File declarations and opening them
 	FILE *datTxt1,*datTxt;
-
+	FILE *outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
+	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth49,*outputAzimuth99; 
 	
 
 	FILE * inpCheck;
@@ -258,7 +274,24 @@ int main(int argc,char* argv[])
 		exit(1);
 	}
 
+	outputAnisotropy00 = fopen("outputDataAni_First.txt","a");
+	outputAnisotropy09 = fopen("outputDataAni_Rad_div_10.txt","a");
+	outputAnisotropy49 = fopen("outputDataAni_Rad_div_2.txt","a");
+	outputAnisotropy99 = fopen("outputDataAni_Last.txt","a");
+	if((outputAnisotropy00 == NULL)||(outputAnisotropy09 == NULL)||(outputAnisotropy49 == NULL)||(outputAnisotropy99 == NULL)) {
+		perror("Cannot open Anisotropy file");
+		return (-1);
+	}
 
+	outputAzimuth00 = fopen("outputDataAzi_First.txt","a");
+	outputAzimuth09 = fopen("outputDataAzi_Rad_div_10.txt","a");
+	outputAzimuth49 = fopen("outputDataAzi_Rad_div_2.txt","a");
+	outputAzimuth99 = fopen("outputDataAzi_Last.txt","a");
+
+	if((outputAzimuth00 == NULL)||(outputAzimuth09 == NULL)||(outputAzimuth49 == NULL)||(outputAzimuth99 == NULL)) {
+		perror("Cannot open Azimuth file");
+		return (-1);
+	}
 
 //-----------Getting total rows and columns in the data file---------------------------------------------------------------------------------------------------//
 
@@ -407,26 +440,26 @@ int main(int argc,char* argv[])
 
 		if((i == 0) ||(i == (DeviceCount -1))){
 			GPU_values[i].size = (GPU_values[i].NumRows + RADIUS ) * XSIZE;	
+			printf("Size is: %ld\n",GPU_values[i].size);
 			printf("i is: %d\n",i);
 		//Sections in between
 		}else{
 			GPU_values[i].size = (GPU_values[i].NumRows + 2*RADIUS) * XSIZE;
 			//offset = RADIUS * -1;
 		}
-		printf("Size is: GPU_values[%zd].NumRows + RADIUS = (%d + %d )*%d *%d =  %ld\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),GPU_values[i].size);	
+		printf("Size is: (GPU_values[%zd].NumRows + RADIUS) * XSIZE *sizeof(int) = (%d + %d )*%d *%d =  %ld\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),GPU_values[i].size);	
 	}
 
-
-
-
+	//return 0;
 
 	for(i = 0;i<DeviceCount;i++){
 
 		printf("\n########################Device %d #############################\n",i);
-
+		printf("Radius is %ld\n",RADIUS);
 		//-----------------Matrix Allocations----------------------------//
 		HANDLE_ERROR(cudaSetDevice(i));
 		HANDLE_ERROR(cudaStreamCreate(&GPU_values[i].stream));
+		HANDLE_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)(GPU_values[i].size *sizeof(int) + ANGLESIZE * sizeof(float) + 2*GPU_values[i].size * RADIUS/RADSTEP * sizeof(float))));
 
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_data,GPU_values[i].size *sizeof(int)));	
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_angle,ANGLESIZE * sizeof(float)));
@@ -462,34 +495,75 @@ int main(int argc,char* argv[])
 
 
 	for(i=0;i<DeviceCount;i++){
-		
 		HANDLE_ERROR(cudaSetDevice(i));
 
 		//-----------------Sending data to GPU----------------------//
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].d_data,GPU_values[i].h_data,GPU_values[i].size * sizeof(int),cudaMemcpyHostToDevice,GPU_values[i].stream));
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].d_angle,GPU_values[i].h_angle,ANGLESIZE * sizeof(float),cudaMemcpyHostToDevice,GPU_values[i].stream));
 
-
 		//----------------Kernel Variables---------------------//
 		dim3 gridSize((GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK ,(GPU_values[i].NumRows+RADIUS),1);
 		dim3 blockSize(THREADS_PER_BLOCK,1,1);
 
+		printf("GridSize(X,Y) = (%d,%d)\n",(GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK,(GPU_values[i].NumRows+RADIUS));
+
 		//----------------Launching the Kernel---------------------//
+		printf("Radius is %ld\n",RADIUS);
 		getMatrix<<<gridSize,blockSize,0,GPU_values[i].stream>>>(GPU_values[i].d_data,GPU_values[i].d_angle,GPU_values[i].d_anisotropy,GPU_values[i].d_azimuth,GPU_values[i].NumCols,GPU_values[i].NumRows);
 
-		//HANDLE_ERROR(cudaDeviceSynchronize());
+		getLastCudaError("Kernel failed \n");
+
+		
 
 		//---------------Getting data back------------------------//
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_anisotropy,GPU_values[i].d_anisotropy,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_azimuth,GPU_values[i].d_azimuth,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
-	}
 
+		printf("Device # %d\n",i);
+		
+	}
+	int z;
+	for(z = 0;z<DeviceCount;z++){
+
+		HANDLE_ERROR(cudaSetDevice(z));
+		HANDLE_ERROR(cudaStreamSynchronize(GPU_values[z].stream));
+
+		printf("Device %d: Rows: %d,Cols: %d\n",z,GPU_values[z].NumRows,GPU_values[z].NumCols);
+		printf("Radius is: %d\n",RADIUS);
+
+		for(j=0;j<GPU_values[z].NumRows ;j++) {
+
+			for(i=0;i<GPU_values[z].NumCols ;i++) {
+
+				if((j>(GPU_values[z].NumRows - 1))||(j<(RADIUS))) continue;
+				if((i>(GPU_values[z].NumCols - RADIUS - 1))||(i<(RADIUS))) continue;
+
+				printf("Col:%d,Row: %d\n",i,j);
+				if (i == (GPU_values[z].NumCols  - RADIUS - 1)) {
+					fprintf(outputAnisotropy00,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
+					fprintf(outputAzimuth00,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
+					fprintf(outputAnisotropy00,"\n");
+					fprintf(outputAzimuth00,"\n");
+
+					
+				}
+				else {
+					fprintf(outputAnisotropy00,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
+					fprintf(outputAzimuth00,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
+					fprintf(outputAnisotropy00,"\t");
+					fprintf(outputAzimuth00,"\t");
+	
+				}					
+			}
+		}
+	}	
 
 
 	for(i=0;i<DeviceCount;i++){
 		//------------------------------------Freeing data---------------------------------------//
 		HANDLE_ERROR(cudaSetDevice(i));	
 		HANDLE_ERROR(cudaStreamSynchronize(GPU_values[i].stream));
+		HANDLE_ERROR(cudaDeviceSynchronize());
 
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_anisotropy));
 		HANDLE_ERROR(cudaFree(GPU_values[i].d_azimuth));
@@ -503,6 +577,7 @@ int main(int argc,char* argv[])
 
 		HANDLE_ERROR(cudaStreamDestroy(GPU_values[i].stream));
 
+		cudaDeviceReset();
 			
 	}
 
@@ -515,7 +590,17 @@ int main(int argc,char* argv[])
 	
 	
 	free(data);
-	
+
+	fclose(outputAnisotropy00);
+	fclose(outputAnisotropy09);
+	fclose(outputAnisotropy49);
+	fclose(outputAnisotropy99);
+
+	fclose(outputAzimuth00);
+	fclose(outputAzimuth09);
+	fclose(outputAzimuth49);
+	fclose(outputAzimuth99);
+
 	return 0;
 }
 		
