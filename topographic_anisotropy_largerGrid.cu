@@ -1,8 +1,3 @@
-
-
-
-
-
 //Input file: space delimited
 
 #include <stdio.h>
@@ -11,22 +6,23 @@
 #include <float.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <helper_functions.h>
-#include <helper_cuda.h>
+//#include <helper_functions.h>
+//#include <helper_cuda.h>
 #include <assert.h>
-#include "test.h"
+#include "topographic_anisotropy_largerGrid.h"
 
 #define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
 //Size of the GPU memory
-#define GPU_MEMSIZE_GB		2
+#define GPU_MEMSIZE_GB		6
 
 //For case in which XSIZE = 1201 and YSIZE = 801
 #define GLOBAL_MEM_USE_MB	773
 #define MEM_USE_PER_THREAD_B	1280
 
 //MAX_XSIZE_POSSIBLE is the maximum size of x or max number of columns if there is only one row
-#define MAX_XSIZE_POSSIBLE	floor(((GPU_MEMSIZE_GB * 1000 - GLOBAL_MEM_USE_MB)*1000000)/MEM_USE_PER_THREAD_B) 
+#define MAX_XSIZE_POSSIBLE	7483647
+//#define MAX_XSIZE_POSSIBLE	floor(((GPU_MEMSIZE_GB * 1000 - GLOBAL_MEM_USE_MB)*1000000)/MEM_USE_PER_THREAD_B) 
 
 
 //#define XSIZE 		1201
@@ -34,7 +30,7 @@
 
 
 //Always have even number of radius;and divisible by 10
-#define RADIUS			20
+#define RADIUS			100
 
 #define	RADSTEP			1
 #define ANGLESIZE		36	//Size of angle array	
@@ -49,13 +45,13 @@
 //#define FILENAME	"Annie_coastDEM.txt"
 //---------------------------Function declarations--------------------------------------------------------------------------//
 
-__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,int XSIZE,int YSIZE);
+__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE);
 int Get_GPU_devices();
 static void HandleError(cudaError_t err,const char *file, int line);
 inline cudaError_t checkCuda(cudaError_t result);
 //--------------------------------------------------------------------------------------------------------------------------//
 
-__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,int XSIZE,int YSIZE)
+__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE)
 {
 
 	//The kernel does not use the new definition of RADIUS in main but the one at the top of the file
@@ -237,25 +233,45 @@ int main(int argc,char* argv[])
 //int main()
 {
 
-	
+	char delimiter;
 
+	//delimiter_string = "A";
 	if(argc == 1){
-		printf("Not enough arguments\n");
+		printf("\tNot enough arguments\n");
+		printf("\t\tUsage: ./Executable DataFileName DataFileDelimiter Radius\n");
 		return 0;
 	}
+
+	//In the future use optarg
+	if(strcmp(argv[2],"space")==0){
+		delimiter = ' ';
+	}
+	else if(strcmp(argv[2],"Space")==0){
+		delimiter = ' ';
+	}else{
+		delimiter = *argv[2];
+	}
+	
+	printf("Delimiter: %c\n",delimiter);
+	//return 0;
+
 	#undef RADIUS
-	#define RADIUS atoi(argv[2])
+	#define RADIUS atoi(argv[3])
 
-	
-	
 	//RADIUS = tmp;
+	printf("Radius is %d\n",RADIUS);
 
-	printf("Radius is %ld\n",RADIUS);
+
+//-------------------------------------------------------------------------------------//
 	//Setting the output buffer to 500MB
 	size_t limit;
-	cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 500 * 1024 * 1024);
+	HANDLE_ERROR(cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 500 * 1024 * 1024));
 	cudaDeviceGetLimit(&limit,cudaLimitPrintfFifoSize);
+	
+	//Setting the heap size 
+	HANDLE_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize,10 * 1000 * 1000 * 4));
 
+//-------------------------------------------------------------------------------------//	
 	//File declarations and opening them
 	FILE *datTxt1,*datTxt;
 	FILE *outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
@@ -297,7 +313,7 @@ int main(int argc,char* argv[])
 
 //-----------Getting total rows and columns in the data file---------------------------------------------------------------------------------------------------//
 
-	int XSIZE,YSIZE;
+	long int XSIZE,YSIZE;
 	XSIZE = 0;
 	YSIZE = 0;
 	long int i,j;
@@ -308,7 +324,13 @@ int main(int argc,char* argv[])
 	memset(max_line,'\0',sizeof(max_line));
 
 	fgets(max_line,MAX_XSIZE_POSSIBLE,datTxt1)!=NULL; 
-	while(*max_line)if(*max_line++ == ' ')++XSIZE;
+	while(*max_line !='\0'){
+		if(*max_line == delimiter){
+			XSIZE++;
+		}
+		max_line++;
+	}
+	
 	XSIZE+=1;
 	
 	//Counting number of rows(y)
@@ -318,7 +340,7 @@ int main(int argc,char* argv[])
 	}while(i != EOF);
 	YSIZE+=1;
 	
-	printf("(XSIZE,YSIZE)::(%d,%d)\n",XSIZE,YSIZE);
+	printf("(XSIZE,YSIZE)::(%ld,%ld)\n",XSIZE,YSIZE);
 
 	datTxt = fopen(argv[1],"r");
 	if(datTxt == NULL) {
@@ -327,7 +349,7 @@ int main(int argc,char* argv[])
 	}
 //-----------------------Checking if the data size fits the memory of the GPU----------------------------------------------------------------------------------------//
 
-	printf("(XSIZE,YSIZE):(%d,%d)\n",XSIZE,YSIZE);
+	printf("(XSIZE,YSIZE):(%ld,%ld)\n",XSIZE,YSIZE);
 	//printf("Maximum size possible = %f\nTotal size of current data(XSIZE * YSIZE) = %zd\n",MAX_XSIZE_POSSIBLE,XSIZE * YSIZE);
 	//(MAX_XSIZE_POSSIBLE - XSIZE*YSIZE >0)? printf("There is enough memory for the computation\n"):printf("There is not enough memory and may result in incorrect results\n");
 
@@ -337,9 +359,9 @@ int main(int argc,char* argv[])
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
-	int* data;
+	float* data;
 
-	data = (int*)malloc(YSIZE * XSIZE * sizeof(int));
+	data = (float*)malloc(YSIZE * XSIZE * sizeof(float));
 
 	//XSIZE ints in a row which are max of 5 digits
 	//with a space in the front and the back and space
@@ -347,7 +369,7 @@ int main(int argc,char* argv[])
 	char *startPtr,*endPtr;
 	char line[XSIZE * 10 +2+(XSIZE-1)];
 	memset(line, '\0', sizeof(line));
-	int Value;
+	float Value;
 	i = 0;
 	j = 0;
 	//Assuming each number in the data set has a max of 7 characters
@@ -362,11 +384,11 @@ int main(int argc,char* argv[])
 			Value = 0;
 			memset(tempVal,'\0',sizeof(tempVal));		
 			if(i != (XSIZE - 1)) {	
-				endPtr = strchr(startPtr,' ');
+				endPtr = strchr(startPtr,delimiter);
 				strncpy(tempVal,startPtr,endPtr-startPtr); 
-				Value = atoi(tempVal);
+				Value = atof(tempVal);
 				*(data + j * XSIZE + i) = Value;
-				fprintf(inpCheck,"%d ",Value);
+				fprintf(inpCheck,"%f ",Value);
 				//printf("(j,i)::(%d,%d)\n",j,i);
 
 				endPtr = endPtr + 1;
@@ -374,10 +396,10 @@ int main(int argc,char* argv[])
 			}	
 			else if(i == (XSIZE - 1)){
 				strcpy(tempVal,startPtr);
-				Value = atoi(tempVal);
+				Value = atof(tempVal);
 				*(data + j * XSIZE + i) = Value;
-				fprintf(inpCheck,"%d\n",Value);
-				//printf("(j,i)::(%d,%d)\n",j,i);
+				fprintf(inpCheck,"%f\n",Value);
+			//	printf("(j,i)::(%d,%d)\n",j,i);
 			}
 		}
 		
@@ -388,7 +410,7 @@ int main(int argc,char* argv[])
 	fclose(datTxt1);
 	fclose(inpCheck);
 
-	printf("Done data[%zd][%zd] = %d\n",j-1,i-1,*(data + 500 * XSIZE + 500));	
+	printf("Done data[%zd][%zd] = %f\n",j-1,i-1,*(data + 500 * XSIZE + 500));	
 	printf("Working File IO\n");
 
 
@@ -407,7 +429,7 @@ int main(int argc,char* argv[])
 
 	//Variable that holds YSIZE initially. This changes as number of rows 
 	//for each GPU is calculated
-	int tmpSize = 0;
+	long int tmpSize = 0;
 	//Variable needed to compute the total rows each GPU will have
 	int count = 0;
 	//offset holds either 2*RADIUS or RADIUS depending on the part of data
@@ -424,7 +446,7 @@ int main(int argc,char* argv[])
 
 	//Iterating through all the available devices
 	for(i = 0;i<DeviceCount;i++){
-		printf("\n########################Device %d #############################\n",i);
+		printf("\n########################Device %ld #############################\n",i);
 
 		//If the total rows are not exactly divisible by the number of GPUs; add 1
 		if(tmpSize % count != 0){
@@ -438,26 +460,26 @@ int main(int argc,char* argv[])
 		//calculated after each iteration
 		tmpSize = tmpSize - GPU_values[i].NumRows;
 		count--;
-		printf("Row Value is: %d\n",GPU_values[i].NumRows);
+		printf("Row Value is: %ld\n",GPU_values[i].NumRows);
 
 		if((i == 0) ||(i == (DeviceCount -1))){
 			GPU_values[i].size = (GPU_values[i].NumRows + RADIUS ) * XSIZE;	
 			printf("Size is: %ld\n",GPU_values[i].size);
-			printf("i is: %d\n",i);
+			printf("i is: %ld\n",i);
 		//Sections in between
 		}else{
 			GPU_values[i].size = (GPU_values[i].NumRows + 2*RADIUS) * XSIZE;
 			//offset = RADIUS * -1;
 		}
-		printf("Size is: (GPU_values[%zd].NumRows + RADIUS) * XSIZE *sizeof(int) = (%d + %d )*%d *%d =  %ld\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),GPU_values[i].size);	
+		printf("Size is: (GPU_values[%zd].NumRows + RADIUS) * XSIZE *sizeof(int) = (%ld + %d )*%ld *%ld =  %ld\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),GPU_values[i].size*sizeof(float));	
 	}
 
 	//return 0;
 
 	for(i = 0;i<DeviceCount;i++){
 
-		printf("\n########################Device %d #############################\n",i);
-		printf("Radius is %ld\n",RADIUS);
+		printf("\n########################Device %ld #############################\n",i);
+		printf("Radius is %d\n",RADIUS);
 		//-----------------Matrix Allocations----------------------------//
 		HANDLE_ERROR(cudaSetDevice(i));
 		HANDLE_ERROR(cudaStreamCreate(&GPU_values[i].stream));
@@ -507,13 +529,14 @@ int main(int argc,char* argv[])
 		dim3 gridSize((GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK ,(GPU_values[i].NumRows+RADIUS),1);
 		dim3 blockSize(THREADS_PER_BLOCK,1,1);
 
-		printf("GridSize(X,Y) = (%d,%d)\n",(GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK,(GPU_values[i].NumRows+RADIUS));
+		printf("GridSize(X,Y) = (%ld,%ld)\n",(GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK,(GPU_values[i].NumRows+RADIUS));
 
 		//----------------Launching the Kernel---------------------//
-		printf("Radius is %ld\n",RADIUS);
+		printf("Radius is %d\n",RADIUS);
 		getMatrix<<<gridSize,blockSize,0,GPU_values[i].stream>>>(GPU_values[i].d_data,GPU_values[i].d_angle,GPU_values[i].d_anisotropy,GPU_values[i].d_azimuth,GPU_values[i].NumCols,GPU_values[i].NumRows);
 
-		getLastCudaError("Kernel failed \n");
+		HANDLE_ERROR(cudaDeviceSynchronize());
+		//getLastCudaError("Kernel failed \n");
 
 		
 
@@ -521,7 +544,7 @@ int main(int argc,char* argv[])
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_anisotropy,GPU_values[i].d_anisotropy,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_azimuth,GPU_values[i].d_azimuth,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
 
-		printf("Device # %d\n",i);
+		printf("Device # %ld\n",i);
 		
 	}
 	int z;
@@ -530,7 +553,7 @@ int main(int argc,char* argv[])
 		HANDLE_ERROR(cudaSetDevice(z));
 		HANDLE_ERROR(cudaStreamSynchronize(GPU_values[z].stream));
 
-		printf("Device %d: Rows: %d,Cols: %d\n",z,GPU_values[z].NumRows,GPU_values[z].NumCols);
+		printf("Device l%d: Rows: %ld,Cols: %ld\n",z,GPU_values[z].NumRows,GPU_values[z].NumCols);
 		printf("Radius is: %d\n",RADIUS);
 
 		for(j=0;j<GPU_values[z].NumRows ;j++) {
@@ -540,7 +563,7 @@ int main(int argc,char* argv[])
 				if((j>(GPU_values[z].NumRows - 1))||(j<(RADIUS))) continue;
 				if((i>(GPU_values[z].NumCols - RADIUS - 1))||(i<(RADIUS))) continue;
 
-				printf("Col:%d,Row: %d\n",i,j);
+				printf("Col:%ld,Row: %ld\n",i,j);
 				if (i == (GPU_values[z].NumCols  - RADIUS - 1)) {
 					fprintf(outputAnisotropy00,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 					fprintf(outputAzimuth00,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
