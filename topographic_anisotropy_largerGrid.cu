@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
+
+#include <string.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 //#include <helper_functions.h>
@@ -43,12 +45,14 @@
 //__constant__ int RADIUS;
 
 //#define FILENAME	"Annie_coastDEM.txt"
-//---------------------------Function declarations--------------------------------------------------------------------------//
+//---------------------------Function and Global variable declarations--------------------------------------------------------------------------//
 
 __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE);
 int Get_GPU_devices();
 static void HandleError(cudaError_t err,const char *file, int line);
 inline cudaError_t checkCuda(cudaError_t result);
+
+
 //--------------------------------------------------------------------------------------------------------------------------//
 
 __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE)
@@ -274,9 +278,10 @@ int main(int argc,char* argv[])
 //-------------------------------------------------------------------------------------//	
 	//File declarations and opening them
 	FILE *datTxt1,*datTxt;
-	FILE *outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy49,*outputAnisotropy99;
-	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth49,*outputAzimuth99; 
+	FILE *outputAnisotropy00,*outputAnisotropy09,*outputAnisotropy24,*outputAnisotropy49,*outputAnisotropy99;
+	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth24,*outputAzimuth49,*outputAzimuth99; 
 	
+	FILE *outputAnisotropy04,*outputAzimuth04;
 
 	FILE * inpCheck;
 	inpCheck = fopen("inpCheck.txt","w");
@@ -292,19 +297,79 @@ int main(int argc,char* argv[])
 		exit(1);
 	}
 
-	outputAnisotropy00 = fopen("outputDataAni_First.txt","a");
-	outputAnisotropy09 = fopen("outputDataAni_Rad_div_10.txt","a");
-	outputAnisotropy49 = fopen("outputDataAni_Rad_div_2.txt","a");
-	outputAnisotropy99 = fopen("outputDataAni_Last.txt","a");
+//-------------------------------------------------------------------------------------//
+//				Setting Up Output Filenames
+//-------------------------------------------------------------------------------------//
+
+	char *lastSlash;
+	char FileName[20];
+	char AniFirst[80],AniFive[80],AniTen[80],AniTwentyFive[80],AniFifty[80],AniLast[80];
+	char AziFirst[80],AziFive[80],AziTen[80],AziTwentyFive[80],AziFifty[80],AziLast[80];
+
+	memset(FileName,'\0',sizeof(FileName));
+
+	lastSlash = strrchr(argv[1],'/');
+
+	if(lastSlash == NULL){
+		strcpy(FileName,argv[1]);
+	}
+	else{
+		printf("Found slash at %s\n",lastSlash);
+		strcpy(FileName,lastSlash+1);
+	}
+	printf("FileName is %s\n",FileName);
+
+	strcpy(AniFirst,"Out_Ani_First_");
+	strcpy(AniFive,"Out_Ani_Five_");
+	strcpy(AniTen,"Out_Ani_Ten_");
+	strcpy(AniTwentyFive,"Out_Ani_TwentyFive_");
+	strcpy(AniFifty,"Out_Ani_Fifty_");
+	strcpy(AniLast,"Out_Ani_Last_");
+
+	strcat(AniFirst,FileName);
+	strcat(AniFive,FileName);
+	strcat(AniTen,FileName);
+	strcat(AniTwentyFive,FileName);
+	strcat(AniFifty,FileName);
+	strcat(AniLast,FileName);
+
+
+
+	strcpy(AziFirst,"Out_Azi_First_");
+	strcpy(AziFive,"Out_Azi_Five_");
+	strcpy(AziTen,"Out_Azi_Ten_");
+	strcpy(AziTwentyFive,"Out_Azi_TwentyFive_");
+	strcpy(AziFifty,"Out_Azi_Fifty_");
+	strcpy(AziLast,"Out_Azi_Last_");
+
+	strcat(AziFirst,FileName);
+	strcat(AziFive,FileName);
+	strcat(AziTen,FileName);
+	strcat(AziTwentyFive,FileName);
+	strcat(AziFifty,FileName);
+	strcat(AziLast,FileName);
+
+	printf("Ani First is %s\n",AniFirst);
+//-------------------------------------------------------------------------------------//
+
+
+	outputAnisotropy00 = fopen(AniFirst,"a");
+	outputAnisotropy04 = fopen(AniFive,"a");
+	outputAnisotropy09 = fopen(AniTen,"a");
+	outputAnisotropy24 = fopen(AniTwentyFive,"a");
+	outputAnisotropy49 = fopen(AniFifty,"a");
+	outputAnisotropy99 = fopen(AniLast,"a");
 	if((outputAnisotropy00 == NULL)||(outputAnisotropy09 == NULL)||(outputAnisotropy49 == NULL)||(outputAnisotropy99 == NULL)) {
 		perror("Cannot open Anisotropy file");
 		return (-1);
 	}
 
-	outputAzimuth00 = fopen("outputDataAzi_First.txt","a");
-	outputAzimuth09 = fopen("outputDataAzi_Rad_div_10.txt","a");
-	outputAzimuth49 = fopen("outputDataAzi_Rad_div_2.txt","a");
-	outputAzimuth99 = fopen("outputDataAzi_Last.txt","a");
+	outputAzimuth00 = fopen(AziFirst,"a");
+	outputAzimuth04 = fopen(AziFive,"a");
+	outputAzimuth09 = fopen(AziTen,"a");
+	outputAzimuth24 = fopen(AziTwentyFive,"a");
+	outputAzimuth49 = fopen(AziFifty,"a");
+	outputAzimuth99 = fopen(AziLast,"a");
 
 	if((outputAzimuth00 == NULL)||(outputAzimuth09 == NULL)||(outputAzimuth49 == NULL)||(outputAzimuth99 == NULL)) {
 		perror("Cannot open Azimuth file");
@@ -376,7 +441,7 @@ int main(int argc,char* argv[])
 	char tempVal[5];
 	memset(tempVal,'\0',sizeof(tempVal));
 
-	printf("Working1\n");
+	printf("Reading the data file.\n");
 	while(fgets(line,XSIZE *10 + 2 + (XSIZE-1),datTxt)!=NULL) {	
 		//printf("Working2\n");
 		startPtr = line;	
@@ -390,6 +455,7 @@ int main(int argc,char* argv[])
 				*(data + j * XSIZE + i) = Value;
 				fprintf(inpCheck,"%f ",Value);
 				//printf("(j,i)::(%d,%d)\n",j,i);
+				//printf("Column %d\n",i);
 
 				endPtr = endPtr + 1;
 				startPtr = endPtr;
@@ -399,13 +465,15 @@ int main(int argc,char* argv[])
 				Value = atof(tempVal);
 				*(data + j * XSIZE + i) = Value;
 				fprintf(inpCheck,"%f\n",Value);
+					
 			//	printf("(j,i)::(%d,%d)\n",j,i);
+		
 			}
 		}
 		
 		j++;
 	}
-
+	printf("Closing the inputdata text files. \n");
 	fclose(datTxt);
 	fclose(datTxt1);
 	fclose(inpCheck);
@@ -563,12 +631,32 @@ int main(int argc,char* argv[])
 				if((j>(GPU_values[z].NumRows - 1))||(j<(RADIUS))) continue;
 				if((i>(GPU_values[z].NumCols - RADIUS - 1))||(i<(RADIUS))) continue;
 
-				printf("Col:%ld,Row: %ld\n",i,j);
+				//printf("Col:%ld,Row: %ld\n",i,j);
 				if (i == (GPU_values[z].NumCols  - RADIUS - 1)) {
 					fprintf(outputAnisotropy00,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 					fprintf(outputAzimuth00,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 					fprintf(outputAnisotropy00,"\n");
 					fprintf(outputAzimuth00,"\n");
+
+					fprintf(outputAnisotropy04,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 5]);
+					fprintf(outputAzimuth04,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 5]);
+					fprintf(outputAnisotropy04,"\n");
+					fprintf(outputAzimuth04,"\n");
+
+					fprintf(outputAnisotropy24,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/4 - 1]);
+					fprintf(outputAzimuth24,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/4 - 1]);
+					fprintf(outputAnisotropy24,"\n");
+					fprintf(outputAzimuth24,"\n");
+
+					fprintf(outputAnisotropy49,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/2 - 1]);
+					fprintf(outputAzimuth49,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/2 - 1]);
+					fprintf(outputAnisotropy49,"\n");
+					fprintf(outputAzimuth49,"\n");
+
+					fprintf(outputAnisotropy99,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS - 1]);
+					fprintf(outputAzimuth99,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS - 1]);
+					fprintf(outputAnisotropy99,"\n");
+					fprintf(outputAzimuth99,"\n");
 
 					
 				}
@@ -577,8 +665,30 @@ int main(int argc,char* argv[])
 					fprintf(outputAzimuth00,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 					fprintf(outputAnisotropy00,"\t");
 					fprintf(outputAzimuth00,"\t");
+
+
+					fprintf(outputAnisotropy04,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 5]);
+					fprintf(outputAzimuth04,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 5]);
+					fprintf(outputAnisotropy04,"\t");
+					fprintf(outputAzimuth04,"\t");
+
+					fprintf(outputAnisotropy24,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/4 - 1]);
+					fprintf(outputAzimuth24,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/4 - 1]);
+					fprintf(outputAnisotropy24,"\t");
+					fprintf(outputAzimuth24,"\t");
+
+					fprintf(outputAnisotropy49,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/2 - 1]);
+					fprintf(outputAzimuth49,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS/2 - 1]);
+					fprintf(outputAnisotropy49,"\t");
+					fprintf(outputAzimuth49,"\t");
+
+					fprintf(outputAnisotropy99,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS - 1]);
+					fprintf(outputAzimuth99,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + RADIUS - 1]);
+					fprintf(outputAnisotropy99,"\t");
+					fprintf(outputAzimuth99,"\t");
 	
-				}					
+				}
+					
 			}
 		}
 	}	
@@ -617,12 +727,16 @@ int main(int argc,char* argv[])
 	free(data);
 
 	fclose(outputAnisotropy00);
+	fclose(outputAnisotropy04);
 	fclose(outputAnisotropy09);
+	fclose(outputAnisotropy24);
 	fclose(outputAnisotropy49);
 	fclose(outputAnisotropy99);
 
 	fclose(outputAzimuth00);
+	fclose(outputAzimuth04);
 	fclose(outputAzimuth09);
+	fclose(outputAzimuth24);
 	fclose(outputAzimuth49);
 	fclose(outputAzimuth99);
 
