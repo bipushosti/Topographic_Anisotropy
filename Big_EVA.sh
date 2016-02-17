@@ -5,9 +5,11 @@ RADIUS=100
 DELIMITER='space'
 
 #------------------------------------
-FILE="./Maine/map_"
+FILE="./Annie/map_"
 EXT=".txt"
 #------------------------------------
+make clean
+make 
 
 run_program()
 {	
