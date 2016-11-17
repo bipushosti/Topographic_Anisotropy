@@ -70,7 +70,8 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 //----------------------------------------------------------------------------------------------------------------------------//	
 
 	//y>YSIZE - 1 for multi-gpu code because the computation needs to be done upto the radius
-	if((y>(YSIZE - 1))||(y<(RADIUS))) return;
+//	if((y>(YSIZE - 1))||(y<(RADIUS))) return;
+	if((y>(YSIZE - RADIUS- 1))||(y<(RADIUS))) return;
 	else if((x>(XSIZE - RADIUS - 1))||(x<(RADIUS))) return;
 	else
 	{
@@ -478,13 +479,12 @@ int main(int argc,char* argv[])
 	fclose(datTxt1);
 	fclose(inpCheck);
 
-	printf("Done data[%zd][%zd] = %f\n",j-1,i-1,*(data + 500 * XSIZE + 500));	
+	printf("Done data[%zd][%zd] = %f\n",j-1,i-1,*(data + (j-1) * XSIZE + (i-1)));	
 	printf("Working File IO\n");
 
 
 //-----------Getting the number of devices and their sizes------------------------------------------------//
-        int DeviceCount;
-        DeviceCount = Get_GPU_devices();
+        const int DeviceCount = Get_GPU_devices();
 
 
 //------------------Initializing the structures that will hold GPU data-----------------------------------//
@@ -507,48 +507,63 @@ int main(int argc,char* argv[])
 	tmpSize = YSIZE/DeviceCount;
 	printf("Each GPU gets %d rows\n",tmpSize);
 
-	//Iterating through all the available devices
+	//Iterating through the available devices upto the second last
 	for(i = 0;i<DeviceCount - 1;i++){
+
 		printf("\n######################## Device %d #############################\n",i);
 
-		GPU_values[i].NumRows = tmpSize;
+		
 		GPU_values[i].NumCols = XSIZE;	
 
-		//if((i == 0) ||(i == (DeviceCount -1))){
+		//The last device is taken care after getting the remaining rows
 		if(i == 0){
+			GPU_values[i].NumRows = tmpSize + RADIUS;
 			GPU_values[i].size = (GPU_values[i].NumRows + RADIUS ) * XSIZE;
 			printf("Number of rows are: %ld\n",GPU_values[i].NumRows);
 			printf("i is: %ld\n",i);
 		//Sections in between
 		}else{
+			GPU_values[i].NumRows = tmpSize + 2 * RADIUS;
 			GPU_values[i].size = (GPU_values[i].NumRows + 2*RADIUS) * XSIZE;
+			printf("Number of rows are: %ld\n",GPU_values[i].size/XSIZE);
 			//offset = RADIUS * -1;
 		}
 		printf("Size is: (GPU_values[%zd].NumRows + RADIUS) * XSIZE *sizeof(int) = (%ld + %d )*%ld *%ld =  %ld\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),GPU_values[i].size*sizeof(float));	
 	}
 
-	//----------------------------------------------------------------------------------------------//
+	//---------------------Allocating number of rows to the last device--------------------------------//
 	printf("\n########################Device %d ############################\n",DeviceCount -1);
 
 	//Store the remaining rows in the last GPU
-	GPU_values[DeviceCount - 1].NumRows = YSIZE - (tmpSize * (DeviceCount - 1));
+	GPU_values[DeviceCount - 1].NumRows = YSIZE - (tmpSize * (DeviceCount - 1)) + RADIUS;
 	GPU_values[i].NumCols = XSIZE;	
 	GPU_values[DeviceCount - 1].size = (GPU_values[DeviceCount - 1].NumRows + RADIUS) * XSIZE;
 
 	printf("Number of rows are: %ld\n",GPU_values[DeviceCount - 1].NumRows);
 	printf("i is: %ld\n",DeviceCount - 1);
+	printf("Size is: (GPU_values[%zd].NumRows + 2 * RADIUS) * XSIZE *sizeof(int) = (%ld + %d )*%ld *%ld =  %ld\n\n",i,GPU_values[i].NumRows,RADIUS,XSIZE,sizeof(float),GPU_values[i].size*sizeof(float));
 
 	//return 0;
 	//----------------------------------------------------------------------------------------------//
 
+
+	int numSegments = 1;
+	
 	for(i = 0;i<DeviceCount;i++){
+
+		if((i==0) || (i==DeviceCount-1)){
+			numSegments = 1;
+		}else{
+			numSegments = 2;
+		}
+
 
 		printf("\n########################Device %d #############################\n",i);
 		printf("Radius is %d\n",RADIUS);
 		//-----------------Matrix Allocations----------------------------//
 		HANDLE_ERROR(cudaSetDevice(i));
 		HANDLE_ERROR(cudaStreamCreate(&GPU_values[i].stream));
-		HANDLE_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)(GPU_values[i].size *sizeof(int) + ANGLESIZE * sizeof(float) + 2*GPU_values[i].size * RADIUS/RADSTEP * sizeof(float))));
+		HANDLE_ERROR(cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)(GPU_values[i].size *sizeof(int) + ANGLESIZE * sizeof(float) + 8*GPU_values[i].size * RADIUS/RADSTEP * sizeof(float))));
 
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_data,GPU_values[i].size * sizeof(int)));	
 		HANDLE_ERROR(cudaMalloc((void**)&GPU_values[i].d_angle,ANGLESIZE * sizeof(float)));
@@ -571,7 +586,7 @@ int main(int argc,char* argv[])
 
 		printf("pos = %d,data_position after sub Index = %zd\n",pos,data_position);
 
-
+//------->>
 		//Initializing the data arrays in each of the gpu with portions of the main data
 		for(j=0;j<GPU_values[i].size;j++){
 			GPU_values[i].h_data[j] = *(data + data_position+j);
@@ -579,10 +594,12 @@ int main(int argc,char* argv[])
 		
 		printf("Data array assigned \n");
 		offset = RADIUS * -1;
-		pos+=GPU_values[i].NumRows;	
+		pos+=GPU_values[i].NumRows-numSegments*RADIUS;	
 	}
 
 
+	
+	printf("\n");
 
 	for(i=0;i<DeviceCount;i++){
 		printf("\n########################Device %d #############################\n",i);
@@ -593,29 +610,48 @@ int main(int argc,char* argv[])
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].d_angle,GPU_values[i].h_angle,ANGLESIZE * sizeof(float),cudaMemcpyHostToDevice,GPU_values[i].stream));
 
 		//----------------Kernel Variables---------------------//
-		dim3 gridSize((GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK ,(GPU_values[i].NumRows+RADIUS),1);
+		if((i==0) || (i==DeviceCount-1)){
+			numSegments = 1;
+		}else{
+			numSegments = 2;
+
+		}
+		dim3 gridSize((GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK ,(GPU_values[i].NumRows),1);
 		dim3 blockSize(THREADS_PER_BLOCK,1,1);
 
-		printf("GridSize(X,Y) = (%ld,%ld)\n",(GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK,(GPU_values[i].NumRows+RADIUS));
+		printf("GridSize(X,Y) = (%ld,%ld)\n",(GPU_values[i].NumCols + THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK,(GPU_values[i].NumRows));
 
 		//----------------Launching the Kernel---------------------//
 		printf("Radius is %d\n",RADIUS);
 		getMatrix<<<gridSize,blockSize,0,GPU_values[i].stream>>>(GPU_values[i].d_data,GPU_values[i].d_angle,GPU_values[i].d_anisotropy,GPU_values[i].d_azimuth,GPU_values[i].NumCols,GPU_values[i].NumRows);
 
-		HANDLE_ERROR(cudaDeviceSynchronize());
+		//HANDLE_ERROR(cudaDeviceSynchronize());
 		//getLastCudaError("Kernel failed \n");
 
 		
 
-		//---------------Getting data back------------------------//
+
+		
+	}
+
+	for(i=0;i<DeviceCount;i++){
+
+		HANDLE_ERROR(cudaDeviceSynchronize());
+				//---------------Getting data back------------------------//
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_anisotropy,GPU_values[i].d_anisotropy,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
 		HANDLE_ERROR(cudaMemcpyAsync(GPU_values[i].h_azimuth,GPU_values[i].d_azimuth,GPU_values[i].size * RADIUS/RADSTEP * sizeof(float),cudaMemcpyDeviceToHost,GPU_values[i].stream));
 
 		printf("Device # %ld\n",i);
-		
 	}
+
+	printf("\n");
 	int z;
+	//To offset the data by radius so that the read starts in the correct segment
+	int offsetRadius = 0;
+
 	for(z = 0;z<DeviceCount;z++){
+
+		printf("\n###############################################################\n",z);
 		printf("\n########################Device %d #############################\n",z);
 		HANDLE_ERROR(cudaSetDevice(z));
 		HANDLE_ERROR(cudaStreamSynchronize(GPU_values[z].stream));
@@ -623,14 +659,21 @@ int main(int argc,char* argv[])
 		printf("Rows: %ld,Cols: %ld\n",GPU_values[z].NumRows,GPU_values[z].NumCols);
 		printf("Radius is: %d\n",RADIUS);
 
+		if((z==0) || z==(DeviceCount-1)){
+			offsetRadius = 0;
+		}else{
+			offsetRadius = 1;
+		}
+
 		for(j=0;j<GPU_values[z].NumRows ;j++) {
 
 			for(i=0;i<GPU_values[z].NumCols ;i++) {
 
-				if((j>(GPU_values[z].NumRows - 1))||(j<(RADIUS))) continue;
+				if((j>(GPU_values[z].NumRows - RADIUS - 1))||(j<(RADIUS))) continue;
 				if((i>(GPU_values[z].NumCols - RADIUS - 1))||(i<(RADIUS))) continue;
 
 				//printf("Col:%ld,Row: %ld\n",i,j);
+				//If last element in the row
 				if (i == (GPU_values[z].NumCols  - RADIUS - 1)) {
 					fprintf(outputAnisotropy00,"%f",GPU_values[z].h_anisotropy[j * GPU_values[z].NumCols  * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
 					fprintf(outputAzimuth00,"%f",GPU_values[z].h_azimuth[j * GPU_values[z].NumCols * RADIUS/RADSTEP + i * RADIUS/RADSTEP + 0]);
