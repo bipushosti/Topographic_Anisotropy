@@ -63,18 +63,22 @@ inline cudaError_t checkCuda(cudaError_t result);
 __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv)
 {
 
-//	Thread indices; Using only the x dimensions
-	int thread_id = (blockIdx.x * blockDim.x) + threadIdx.x;
+	//Block Indices
+	int block_id =  blockIdx.y * gridDim.x + blockIdx.x;
+
+	//Thread indices; Using only the x dimensions
+	int thread_id = block_id * blockDim.x + threadIdx.x;
 
 	//The entire radius cannot be used to create shared memory; So a smaller radius size is used
 	int dividedRadius = RADIUS/radiusDiv;
 
 	//int thread_y = (blockIdx.y * blockDim.y) + threadIdx.y;
-	int thread_x = thread_id - (thread_id / dividedRadius) * dividedRadius; 
-	int thread_y = thread_id / dividedRadius;
+	int thread_x = threadIdx.x - (threadIdx.x / dividedRadius) * dividedRadius; 
+	int thread_y = threadIdx.x / dividedRadius;
 
-	int thread_idColumn = thread_x * angleSize + thread_y;
-	int thread_idRow = thread_y * dividedRadius + thread_x;
+	int thread_idColumn,thread_idRow;
+	//int thread_idColumn = thread_x * angleSize + thread_y;
+	//int thread_idRow = thread_y * dividedRadius + thread_x;
 	
 	//Data indices
 	int dataIdx_x = blockIdx.x + RADIUS;
@@ -84,7 +88,7 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 	//Shared memory that holds avg_value and avg_valueOrtho
 	extern __shared__ float averages[];
 
-	if(thread_y == 0 && thread_x == 0){printf("Inside the kernel\n");}
+	//if(thread_y == 0 && thread_x == 0){printf("Inside the kernel\n");}
 
 
 	int xrad,yrad,xradOrtho1,yradOrtho1,xradOneEighty,yradOneEighty,valueOneEighty;
@@ -94,7 +98,7 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 	float sum_valueOrtho,avg_valueOrtho;
 
 	//For 1 GPU
-	if(thread_id < (dividedRadius * angleSize))
+	if(threadIdx.x < (dividedRadius * angleSize))
 	{
 		for(radIdx=0;radIdx<radiusDiv;radIdx++){
 
@@ -138,8 +142,7 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 		
 			sum_valueOrtho = valueOrtho1 + valueOrtho2;
 			//avg_valueOrtho = sum_valueOrtho/(2*(thread_x * radiusDiv + radIdx + 1));
-		
-//------------->>		
+			
 			//-----Storing the sum values in the shared memory array-----------------------------------------------------//
 			averages[thread_y * RADIUS + thread_x * radiusDiv + radIdx] = sum_value;
 			averages[RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + radIdx] = sum_valueOrtho;
@@ -150,102 +153,204 @@ __global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimut
 		__syncthreads();	
 	}
 
-	//------------------------------------------------------------------------------------------------------------//	
-	if((thread_x > 0) && (thread_id < (dividedRadius * angleSize)))
+	//---------------------------------------------------------------------------------------------------------------------------//	
+
+	//Using 1 thread per row; Therefore total threads for this part equals angleSize
+	if(threadIdx.x < angleSize)
 	{
+
+//printf("Block_id = %d, Thread_id = %d\n",blockIdx.x,thread_id);
+		sum_value = 0;
+		sum_valueOrtho = 0;
+		int offset_1 = 2 * RADIUS * angleSize;
+		int offset_2 = RADIUS * angleSize;
+
+		//--------Getting the avg_value and storing it in the shared mem array "averages"-------------------------------------//
+		//Loop from the start of the row to the end of the row which is RADIUS away from the start
+
+		for(i = 0; i < RADIUS; i++){
+			sum_value += averages[threadIdx.x * RADIUS + i];	
+			avg_value = sum_value/(2*(i+1));
+			averages[offset_1 + threadIdx.x * RADIUS + i] = avg_value;
+		}
+
+		//Now the last matrix has the averaged values (avg_value);
+		//First has the individual sum values; 
+		//And the second has the individual sum of Ortho values;		 
+
+		//__syncthreads();//----->Waiting for the remaining threads might not be necessary since each thread acts on a different row.
+
+		//-------Getting the avg_valueOrtho and storing it in the shared mem array---------------------------------------------//	
+		//Loop from the start of the row to the end of the row which is RADIUS away from the start
+
+		
+
+		for(i = 0; i < RADIUS; i++){
+			sum_valueOrtho += averages[offset_2 + threadIdx.x * RADIUS + i];	
+			avg_valueOrtho = sum_valueOrtho/(2*(i+1));
+			averages[threadIdx.x * RADIUS + i] = avg_valueOrtho;
+		}
+
+		//Now the first matrix has averaged Ortho values (avg_valueOrtho); 
+		//The last matrix still has the averaged values (avg_values);
+		//And the second has the individual sum of Ortho values;		 
+
+		__syncthreads();
+	}
+
+	
+
+
+
+
+
+
+	//---------------------------------------------------------------------------------------------------------------------------//	
+
+
+
+//*************
+//NEEDS TO BE IMPLEMENTED ONCE THE SINGE THREAD AVERAGE PART IS COMPLETE AND ACCURATE
+//*************
+
+
+
+/*
+	//Uses multiple threads to get the average
+
+	if((thread_x > 0) && (threadIdx.x < (dividedRadius * angleSize)))
+	{
+		int offsetStart,offsetEnd;
+
 		//Getting the avg_value and storing it in the shared mem array "averages"
 		for(radIdx=0;radIdx<radiusDiv;radIdx++){
 
 			sum_value = 0;
-
-			for(i=(thread_x * radiusDiv + radIdx); i>=0; i--){
-				sum_value += averages[thread_y * RADIUS + i];
+			
+			offsetStart = thread_y * RADIUS + thread_x * radiusDiv + radIdx;
+			offsetEnd = thread_y * RADIUS;
+ 
+			for(i = offsetStart; i>= offsetEnd; i--)
+			{ 
+			//for(i=(thread_x * radiusDiv + radIdx); i>=0; i--){
+				sum_value += averages[i];
 			}
 
 			avg_value = sum_value/(2*(thread_x * radiusDiv + radIdx + 1));
 			averages[2 * RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + radIdx] = avg_value;
-
-			//Now the last matrix has the averaged values (avg_value);
-			//First has the individual sum values; 
-			//And the second has the individual sum of Ortho values;
+	
 		}
+		//Now the last matrix has the averaged values (avg_value);
+		//First has the individual sum values; 
+		//And the second has the individual sum of Ortho values;
+
 		__syncthreads();
 	
-	return;
 		//------------------------------------------------------------------------------------------------------------//	
 		//Getting the avg_valueOrtho and storing it in the shared mem array
-		sum_valueOrtho = 0;
-//-----------> thread_x does not go from 0 t0 99 but 0 to 24!
-		for(i=thread_x; i>=0; i--){
-			sum_valueOrtho += averages[RADIUS * angleSize + thread_y * RADIUS + i];
-		}
+		for(radIdx=0;radIdx<radiusDiv;radIdx++){
+		
+			sum_valueOrtho = 0;
 
-		avg_valueOrtho = sum_valueOrtho/(2*(thread_x * radiusDiv + radIdx + 1));
-		averages[thread_y * RADIUS + thread_x] = avg_valueOrtho;
+			offsetStart = RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + radIdx;
+			offsetEnd = RADIUS * angleSize + thread_y * RADIUS;
+
+			for(i = offsetStart; i>= offsetEnd; i++)
+			//for(i=(thread_x * radiusDiv + radIdx); i>=0; i--)
+			{
+				sum_valueOrtho += averages[i];
+			}
+
+			avg_valueOrtho = sum_valueOrtho/(2*(thread_x * radiusDiv + radIdx + 1));
+			averages[thread_y * RADIUS + thread_x * radiusDiv + radIdx] = avg_valueOrtho;
+
+		}
 
 		//Now the first matrix has averaged Ortho values (avg_valueOrtho); 
 		//The last matrix still has the averaged values (avg_values);
 		//And the second has the individual sum of Ortho values;
 
 		__syncthreads();
+	}
+*/
 
+	//---------------------------------------------------------------------------------------------------------------------------//	
+	if(threadIdx.x < (dividedRadius * angleSize))
+	{
 		//----Error checking-----------------------------------------------------------------------------------------//
-		//Getting averages and storing them in variables
-		avg_value = averages[2 * RADIUS * angleSize + thread_y * RADIUS + thread_x];
-		avg_valueOrtho = averages[ thread_y * RADIUS + thread_x];
+		for(radIdx=0;radIdx<radiusDiv;radIdx++){
+			//Getting averages and storing them in variables
+			avg_value = averages[2 * RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + radIdx];
+			avg_valueOrtho = averages[ thread_y * RADIUS + thread_x * radiusDiv + radIdx];
 
-		//Fail safe to ensure there is no nan or inf when taking anisotropy ratio, later on.			
-		if(avg_value == 0) {
-			if((avg_valueOrtho < 1) && (avg_valueOrtho > 0)) {
-				avg_value = avg_valueOrtho;
+			//Fail safe to ensure there is no nan or inf when taking anisotropy ratio, later on.			
+			if(avg_value == 0) {
+				if((avg_valueOrtho < 1) && (avg_valueOrtho > 0)) {
+					avg_value = avg_valueOrtho;
 					
+				}
+				else{
+					avg_value = 1;
+				}
 			}
-			else{
-				avg_value = 1;
-			}
-		}
 
-		if(avg_valueOrtho == 0) {
-			avg_valueOrtho = 1;
+			if(avg_valueOrtho == 0) {
+				avg_valueOrtho = 1;
+			}
+		
+			//Storing the averages back into the shared memory array
+			averages[2 * RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + radIdx] = avg_value;
+			averages[thread_y * RADIUS + thread_x * radiusDiv + radIdx] = avg_valueOrtho;
 		}
-		
-		//Storing the averages back into the shared memory array
-		averages[2 * RADIUS * angleSize + thread_y * RADIUS + thread_x] = avg_value;
-		averages[thread_y * RADIUS + thread_x] = avg_valueOrtho;
-		
 		__syncthreads();	
-		//------------------------------------------------------------------------------------------------------------//
-		//Transposing the matrix but fitting it into the same matrix; This is done to get min values from each RADIUS
-		averages[RADIUS * angleSize + thread_idColumn] = averages[2 * RADIUS * angleSize + thread_idRow];
+
+
+
+	//--------------Transposing the matrix to get the smallest number from the columns-----------------------------------//
+
+		int i,j,k;
+		for(radIdx=0;radIdx<radiusDiv;radIdx++){
+		    //for(int n = 0; n<N*M; n++) {
+			//int i = n/N;
+			//int j = n%N;
+			//dst[n] = src[M*j + i];
+		    //}
+			i = (thread_y * RADIUS + thread_x * radiusDiv + radIdx)/angleSize;
+			j = (thread_y * RADIUS + thread_x * radiusDiv + radIdx)%angleSize;
+			k = RADIUS * j + i;
+			//Transposing the matrix but fitting it into the same matrix; This is done to get min values from each RADIUS
+			averages[RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + radIdx] = averages[2 * RADIUS * angleSize + k];
+
+		}
+		__syncthreads();	
 
 		//Now the second has the transposed last matrix such that all the values fit;
 		//The first matrix has averaged Ortho values (avg_valueOrtho); 
 		//The last matrix still has the averaged values (avg_values);
-
-
-		__syncthreads();	
+	
 	}
-		//------------------------------------------------------------------------------------------------------------//
+
+	//------------------------------------------------------------------------------------------------------------//
 	
 
-	if((thread_y == 0) && (thread_x < dividedRadius))		
+	if(threadIdx.x < RADIUS)		
 	{
 		//Previously called variance
 		float* min_val;
 		int orthoAngleIndex;
 
 		//Getting the minimum
-		//min_val = thrust::min_element(thrust::seq, averages + RADIUS * angleSize + thread_x * angleSize, averages + RADIUS * angleSize + thread_x * angleSize + angleSize);
-		thrust::sort(thrust::seq, averages + RADIUS * angleSize + thread_x * angleSize, averages + RADIUS * angleSize + thread_x * angleSize + angleSize);
+		min_val = thrust::min_element(thrust::seq, averages + RADIUS * angleSize + threadIdx.x * angleSize, averages + RADIUS * angleSize + (threadIdx.x + 1) * angleSize);
+		//thrust::sort(thrust::seq, averages + RADIUS * angleSize + thread_x * angleSize, averages + RADIUS * angleSize + thread_x * angleSize + angleSize);
 		return;
 
-		orthoAngleIndex = (int)(min_val - averages + RADIUS * angleSize + thread_x * angleSize); 
+		orthoAngleIndex = (int)(min_val - (averages + RADIUS * angleSize + threadIdx.x * angleSize)); 
 
-		anisotropy[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + thread_x] = *(min_val)/averages[orthoAngleIndex * RADIUS + thread_x]; 
-		azimuth[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + thread_x] = angle[orthoAngleIndex] * 180/PI; 
+		anisotropy[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = *(min_val)/averages[orthoAngleIndex * RADIUS + thread_x]; 
+		azimuth[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = angle[orthoAngleIndex] * 180/PI; 
 	}
 	//------------------------------------------------------------------------------------------------------------//
-//return;
+return;
  
 }
 
@@ -373,6 +478,7 @@ int main(int argc,char* argv[])
 
 	//RADIUS = tmp;
 	printf("Radius is %d\n",RADIUS);
+	printf("AngleSize is %d\n",ANGLESIZE);
 	printf("Input file name is: %s\n",FileName);
 
 
