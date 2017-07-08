@@ -256,7 +256,7 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	//Error Checking-------------------------------------------------------------------------------------------------------------//	
 	if(threadIdx.x < (dividedRadius * angleSize))
 	{
-return;		
+	
 		//----Error checking-----------------------------------------------------------------------------------------//
 		for(i=0;i<radiusDiv;i++){
 			//Getting averages and storing them in variables
@@ -361,7 +361,7 @@ return;
 	}
 
 	//------------------------------------------------------------------------------------------------------------//
-	
+return;		
 
  
 }
@@ -827,7 +827,7 @@ int main(int argc,char* argv[])
 
 	threadsPBlock_Y = 1;
 
-	for(radiusDiv=1; radiusDiv<10; radiusDiv++){
+	for(radiusDiv=5; radiusDiv<10; radiusDiv++){
 
 		if(RADIUS % radiusDiv == 0) {
 
