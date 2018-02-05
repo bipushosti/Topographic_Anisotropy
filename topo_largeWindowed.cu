@@ -50,6 +50,25 @@
 #define	RADSTEP			1
 
 using namespace std;
+
+//---------------------------- Grid Layout ------------------------------------------------------------------------------------------------------//
+/*
+
+	|
+	|
+	|
+Angles	|
+	|
+      	|
+	------------------------------------------
+		Radius (Divided by radiusDiv)
+
+	Max the angles can be is 36;
+
+*/	
+
+
+
 //---------------------------Function and Global variable declarations--------------------------------------------------------------------------//
 __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__ angle,float* __restrict__ anisotropy,float* __restrict__ azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv);
 //__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv);
@@ -58,6 +77,7 @@ static void HandleError( cudaError_t err,const char *file, int line);
 inline cudaError_t checkCuda(cudaError_t result);
 
 //--------------------------------------------------------------------------------------------------------------------------//
+
 __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__ angle,float* __restrict__ anisotropy,float* __restrict__ azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv)
 //__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv)
 {
@@ -69,16 +89,19 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	//int thread_id = block_id * blockDim.x + threadIdx.x;
 
 	//The entire radius cannot be used to create shared memory; So a smaller radius size is used
+	//When RADIUS = 100 and radiusDiv = 5, dividedRadius=20
 	int dividedRadius = RADIUS/radiusDiv;
 
 	//int thread_y = (blockIdx.y * blockDim.y) + threadIdx.y;
-	int thread_x = threadIdx.x - (threadIdx.x / dividedRadius) * dividedRadius; 
-	int thread_y = threadIdx.x / dividedRadius;
+	int thread_x;
+	int thread_y;
 	
 	//Data indices
 	int dataIdx_x = blockIdx.x + RADIUS;
 	int dataIdx_y = blockIdx.y + RADIUS;
 	
+
+
 //----------------------------------------------------------------------------------------------------------------------------//	
 	//Shared memory that holds avg_value and avg_valueOrtho
 	extern __shared__ float averages[];
@@ -89,15 +112,22 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	int xrad,yrad,xradOrtho1,yradOrtho1,xradOneEighty,yradOneEighty,valueOneEighty;
 	int xradOrtho2,yradOrtho2,i;
 
+	int sum_value,sum_valueOrtho;
 
 	//int valueOrtho1,valueOrtho2;
 	//float value;
-	float sum_value,avg_value;
-	float sum_valueOrtho,avg_valueOrtho;
+	float avg_value,avg_valueOrtho;
+	float avg_valueSum;
 
 	//For 1 GPU
-	if(threadIdx.x < (dividedRadius * angleSize))
+	if(threadIdx.x < (dividedRadius * angleSize)) //For radius=100, total threads per block=736, checks if less than 720 (idx starts at 0)
 	{
+		int thread_x = threadIdx.x - (int)((float)threadIdx.x / (float)dividedRadius) * dividedRadius; 
+		int thread_y = threadIdx.x / dividedRadius;
+
+
+		
+
 		sum_value = 0;
 		sum_valueOrtho = 0;
 
@@ -109,6 +139,8 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 			//Computation for angle of interest
 			xrad = (int)lrintf(cosf(angle[thread_y]) * (thread_x * radiusDiv + i + 1) + dataIdx_x);	
 			yrad = (int)lrintf(sinf(angle[thread_y]) * (thread_x * radiusDiv + i + 1) + dataIdx_y);	
+
+//Works till here; xrad and yrad for this and the working versions are the same **
 
 
 			//value = data[dataIdx_y * XSIZE + dataIdx_x]  - data[yrad * XSIZE + xrad];
@@ -134,22 +166,47 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 			//valueOrtho1 = valueOrtho1 * valueOrtho1;
 			//valueOrtho2 = data[dataIdx_y * XSIZE + dataIdx_x]  - data[yradOrtho2 * XSIZE + xradOrtho2];
 			//valueOrtho2 = valueOrtho2 * valueOrtho2;
-		
+
+//Both parts of the sum value are same in this and the working version
+
+
+
+//All rads and one eighty values work!
 			//-------------------------------Getting the sum values-------------------------------------------------------//
 			//sum_value = value + valueOneEighty;
 			sum_value = data[dataIdx_y * XSIZE + dataIdx_x]  - data[yrad * XSIZE + xrad];
+
 			sum_value = sum_value * sum_value;
-			sum_value += valueOneEighty;		
+
+//Same sum_values too!
+
+			sum_value += valueOneEighty;	
+//Sum_value is correct	
+
 		
 			//sum_valueOrtho = valueOrtho1 + valueOrtho2;
 			sum_valueOrtho = data[dataIdx_y * XSIZE + dataIdx_x]  - data[yradOrtho1 * XSIZE + xradOrtho1];
 			sum_valueOrtho = sum_valueOrtho * sum_valueOrtho; //valueOrtho1
+//valueOrtho1 Or sum_valueOrtho till is point is correct
+						
+
 			sum_valueOrtho += (data[dataIdx_y * XSIZE + dataIdx_x]  - data[yradOrtho2 * XSIZE + xradOrtho2])*(data[dataIdx_y * XSIZE + dataIdx_x]  - data[yradOrtho2 * XSIZE + xradOrtho2]);
+			
+//Correct till here; Problem with the averages?
 
 			//-----Storing the sum values in the shared memory array-----------------------------------------------------//
 			averages[thread_y * RADIUS + thread_x * radiusDiv + i] = sum_value;
+//Correct sum_values going to the correct positions
+
 			averages[RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + i] = sum_valueOrtho;
+
+
+
 			//averages[2 * RADIUS * angleSize + thread_y * RADIUS + thread_x* radiusDiv + i] = sum_value;
+
+			//printf("X Y Value dataIdx_x dataIdx_y xrad yrad %d %d %f %d %d %f %f \n",thread_x,thread_y,sum_value,dataIdx_x,dataIdx_y,xrad,yrad);
+			//printf("X Y EleValue %d %d %f\n",thread_x,thread_y,data[thread_y * RADIUS + thread_x]);
+//			printf("thread_x thread_y xrad yrad %d %d %d %d\n",thread_x,thread_y,xrad,yrad);
 	
 		}
 	
@@ -157,33 +214,57 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	}
 	__syncthreads();
 
-	//-Single thread averaging (Using 1 thread per row)---------------------------------------------------------------------------//	
+
+
+	//-Single thread averaging (Using 1 thread per row)---------------------------------------------------------------------------//
+	//The block only contains threads in x dimension. Therefore, threadIdx.x is the thread index.	
 	if(threadIdx.x < (dividedRadius * angleSize)){
+
+		//Only getting thr threads from 0 to angleSize (0 to 35; ANGLESIZE = 36 is hard coded)
 		if(threadIdx.x < angleSize)
 		{
 			//--------Getting the avg_value and storing it in the shared mem array "averages"-------------------------------------//
-			sum_value = 0;
+			//Can't use an int to store a float
+			//sum_value = 0;
+
+			avg_valueSum = 0.0;
+
 			//Loop from the start of the row to the end of the row which is RADIUS away from the start
 			for(i = 0; i < RADIUS; i++){
-				sum_value += averages[threadIdx.x * RADIUS + i];	
-				avg_value = sum_value/(2*(i+1));
+				avg_valueSum += averages[threadIdx.x * RADIUS + i];	
+				avg_value = avg_valueSum/(2*(i+1));
 				averages[threadIdx.x * RADIUS + i] = avg_value;
+
+				printf("%d %d %f\n",threadIdx.x,i,avg_value);
+
 			}
 
 			//-------Getting the avg_valueOrtho and storing it in the shared mem array---------------------------------------------//	
-			sum_valueOrtho = 0;
+			//Can't use int to store a float
+			//sum_valueOrtho = 0;
+	
+			//Reusing variable
+			//Using avg_valueSum to store sum of avg_valueOrtho
+			avg_valueSum = 0.0;
 
 			//Looping through the row
 			for(i = 0; i < RADIUS; i++){
-				sum_valueOrtho += averages[RADIUS * angleSize + threadIdx.x * RADIUS + i];	
-				avg_valueOrtho = sum_valueOrtho/(2*(i+1));
+				avg_valueSum += averages[RADIUS * angleSize + threadIdx.x * RADIUS + i];	
+				avg_valueOrtho = avg_valueSum/(2*i+1);
 				averages[RADIUS * angleSize + threadIdx.x * RADIUS + i] = avg_valueOrtho;
 			}
 		}
 		//Now the first matrix has the averaged values (avg_value);
 		//And the second has the averaged Ortho values (avg_valueOrtho);	
 	}
+
+
+
+
 	__syncthreads();
+
+
+//------------------>> Fixed till here; Ints were used to store floats
 
 	//-Multi-thread averaging----------------------------------------------------------------------------------------------------//	
 //*************
@@ -505,16 +586,17 @@ int main(int argc,char* argv[])
 	FILE *outputAzimuth00,*outputAzimuth09,*outputAzimuth24,*outputAzimuth49,*outputAzimuth99; 
 	
 	FILE *outputAnisotropy04,*outputAzimuth04;
-
 	FILE * inpCheck;
+
+
+	datTxt1 = fopen(FileName,"r");	
 	inpCheck = fopen("inpCheck.txt","w");
+
 	if(inpCheck == NULL) {
 		perror("Cannot open inpcheck.txt file");
 		return (-1);
 	}
-	
-
-	datTxt1 = fopen(FileName,"r");	
+		
 	if(datTxt1 == NULL) {
 		printf("Cannot open file: %s  \nCheck if file exists.\n",argv[1]);
 		exit(1);
@@ -806,9 +888,10 @@ int main(int argc,char* argv[])
 		pos+=GPU_values[i].NumRows-numSegments*RADIUS;	
 	}
 
+	//Shared memory only holds the anisotropy data for each point in the (radius,anglesize) grid
 	size_t SharedMemSize = 2 * RADIUS * ANGLESIZE * sizeof(float);
 	int threadsPBlock_X;
-	int threadsPBlock_Y = ANGLESIZE; 
+	int threadsPBlock_Y; 
 	//Radius is divided by radiusDiv to make sure number of threads per block is less than max (1024)
 	int radiusDiv;
 	int tempSize;
@@ -825,32 +908,44 @@ int main(int argc,char* argv[])
 //	(RADIUS % 32) == 0?:threadsPBlock_X = RADIUS:threadsPBlock_X = 32 * (RADIUS/32 + 1);
 //	(ANGLESIZE % 32) == 0?:threadsPBlock_Y = ANGLESIZE;threadsPBlock_Y = 32 * (ANGLESIZE/32 + 1);
 
+
+	//Creating a one dimensional thread block	
 	threadsPBlock_Y = 1;
 
-	for(radiusDiv=5; radiusDiv<10; radiusDiv++){
+	//Getting the maximum possible threads per block as it cannot exceed 1024
+	if( RADIUS * ANGLESIZE > 1024){
 
-		if(RADIUS % radiusDiv == 0) {
+		for(radiusDiv=5; radiusDiv<10; radiusDiv++){
 
-			tempSize = RADIUS/radiusDiv * ANGLESIZE;
-			if((tempSize % 32) != 0){
-				tempSize = 32 * (tempSize/32 + 1);
-			}
+			if(RADIUS % radiusDiv == 0) {
 
-			if(tempSize < 1024){
-				//threadsPBlock_X = RADIUS/radiusDiv;
-				threadsPBlock_X = tempSize;
-				break;
-			}
-			
+				tempSize = RADIUS/radiusDiv * ANGLESIZE;
+				if((tempSize % 32) != 0){
+					tempSize = 32 * (tempSize/32 + 1);
+				}
 
+				if(tempSize < 1024){
+					//threadsPBlock_X = RADIUS/radiusDiv;
+					threadsPBlock_X = tempSize;
+					break;
+				}			
+			}	
 		}
-	
+	}
+	//If the total threads per block is less than 1024
+	else{
+		//Since the total threads is less than 1024 there is no need to divide the RADIUS		
+		radiusDiv = 1;
+		threadsPBlock_X = RADIUS * ANGLESIZE;
+
+		if(threadsPBlock_X % 32 != 0){
+			threadsPBlock_X  = 32 * (threadsPBlock_X/32 + 1);
+		}				
 	}
 
 
-
-
-	printf("Total Threads per block is: %d \n",tempSize);
+	printf("radiusDiv is: %d\n",radiusDiv);
+	printf("Total Threads per block is: %d \n",threadsPBlock_X);
 	printf("SharedMemSize: %ld, threadsPBlock_X: %d, threadsPBlock_Y: %d\n",SharedMemSize,threadsPBlock_X,threadsPBlock_Y);
 	printf("GridX: %d, GridY: %d\n",GPU_values[0].NumCols - 2* RADIUS,GPU_values[0].NumRows - 2* RADIUS);
 
