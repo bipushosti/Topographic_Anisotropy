@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
+#include <limits.h>
 
 #include <unistd.h>
 #include <ctype.h>
@@ -71,11 +72,42 @@ Angles	|
 
 //---------------------------Function and Global variable declarations--------------------------------------------------------------------------//
 __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__ angle,float* __restrict__ anisotropy,float* __restrict__ azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv);
+__device__ float check_if_zero(float value_to_check,float functionArg1, float functionArg2);
+
 //__global__ void getMatrix(int* data,float* angle,float* anisotropy,float* azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv);
 int Get_GPU_devices();
 static void HandleError( cudaError_t err,const char *file, int line);
 inline cudaError_t checkCuda(cudaError_t result);
 
+//-----------------------------------------------Device Functions-----------------------------------------------------------//
+
+//Function that returns avg_valueOrtho if avg_value ==0 && avg_valueOrtho <1 && avg_valueOrtho >0
+//Or returns 1 otherwise
+__device__ float calculate_averageValue(float avg_value,float avg_valueOrtho)
+{
+
+	float x1,x2,x3;
+	//float f1,f2,f3;
+
+	x1 = ceilf(avg_value/FLT_MAX);
+	x2 = ceilf(floorf(avg_valueOrtho)/FLT_MAX);
+	x3 = ceilf(avg_valueOrtho/FLT_MAX);	
+/*	
+	f3 = x3 * avg_valueOrtho + (1 - x3);
+	f2 = x2 + (1 - x2) * f3;
+	f1 = x1 * avg_value + (1 - x1) * f2;
+*/
+
+	return (x1 * avg_value + (1 - x1) * (x2 + (1 - x2) * (x3 * avg_valueOrtho + (1 - x3))));
+
+}
+
+//Function that returns 1 if averageValueOrtho == 0 and averageValueOrtho otherwise
+__device__ float calculate_averageValueOrtho(float averageValueOrtho)
+{
+	return (ceil(averageValueOrtho/FLT_MAX) * averageValueOrtho + (1 - ceil(averageValueOrtho/FLT_MAX)) * 1);
+
+}
 //--------------------------------------------------------------------------------------------------------------------------//
 
 __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__ angle,float* __restrict__ anisotropy,float* __restrict__ azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv)
@@ -93,8 +125,8 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	int dividedRadius = RADIUS/radiusDiv;
 
 	//int thread_y = (blockIdx.y * blockDim.y) + threadIdx.y;
-	int thread_x;
-	int thread_y;
+	int thread_x = 0;
+	int thread_y = 0;
 	
 	//Data indices
 	int dataIdx_x = blockIdx.x + RADIUS;
@@ -119,12 +151,13 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	float avg_value,avg_valueOrtho;
 	float avg_valueSum;
 
+
 	//For 1 GPU
 	if(threadIdx.x < (dividedRadius * angleSize)) //For radius=100, total threads per block=736, checks if less than 720 (idx starts at 0)
 	{
-		int thread_x = threadIdx.x - (int)((float)threadIdx.x / (float)dividedRadius) * dividedRadius; 
-		int thread_y = threadIdx.x / dividedRadius;
-
+//Needs review; Need to add CUDA float to int and back functions?
+		thread_x = threadIdx.x - (int)((float)threadIdx.x / (float)dividedRadius) * dividedRadius; 
+		thread_y = threadIdx.x / dividedRadius;
 
 		
 
@@ -216,13 +249,15 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 
 
 
-	//-Single thread averaging (Using 1 thread per row)---------------------------------------------------------------------------//
+	//Single thread averaging over the row or x dimension (Using 1 thread per row)---------------------------------------------------------------------------//
 	//The block only contains threads in x dimension. Therefore, threadIdx.x is the thread index.	
 	if(threadIdx.x < (dividedRadius * angleSize)){
 
 		//Only getting thr threads from 0 to angleSize (0 to 35; ANGLESIZE = 36 is hard coded)
+		// Going through each Anglesize (y-direction) and getting the average of the row (x-direction)
 		if(threadIdx.x < angleSize)
 		{
+
 			//--------Getting the avg_value and storing it in the shared mem array "averages"-------------------------------------//
 			//Can't use an int to store a float
 			//sum_value = 0;
@@ -235,7 +270,7 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 				avg_value = avg_valueSum/(2*(i+1));
 				averages[threadIdx.x * RADIUS + i] = avg_value;
 
-				printf("%d %d %f\n",threadIdx.x,i,avg_value);
+				
 
 			}
 
@@ -252,6 +287,7 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 				avg_valueSum += averages[RADIUS * angleSize + threadIdx.x * RADIUS + i];	
 				avg_valueOrtho = avg_valueSum/(2*i+1);
 				averages[RADIUS * angleSize + threadIdx.x * RADIUS + i] = avg_valueOrtho;
+
 			}
 		}
 		//Now the first matrix has the averaged values (avg_value);
@@ -263,8 +299,20 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 
 	__syncthreads();
 
+//Correct upto this point;
+//Result from this is in float while that from the previous version is in ints. Therefore two results differ by less than an int (Ex: 374 vs 374.200012)
+//Need to change the original code to make sure the results are stored in floats by using CUDA's conversion functions
 
 //------------------>> Fixed till here; Ints were used to store floats
+
+
+
+
+
+
+
+
+
 
 	//-Multi-thread averaging----------------------------------------------------------------------------------------------------//	
 //*************
@@ -334,6 +382,7 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 	//if(blockIdx.x==0 && blockIdx.y ==0){ printf("threadIdx.x = %d\n",threadIdx.x);}
 
 
+
 	//Error Checking-------------------------------------------------------------------------------------------------------------//	
 	if(threadIdx.x < (dividedRadius * angleSize))
 	{
@@ -345,24 +394,17 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 			avg_valueOrtho = averages[ RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + i];
 			
 
-			//Fail safe to ensure there is no nan or inf when taking anisotropy ratio, later on.			
-			if(avg_value == 0) {
-				if((avg_valueOrtho < 1) && (avg_valueOrtho > 0)) {
-					avg_value = avg_valueOrtho;
-					
-				}
-				else{
-					avg_value = 1;
-				}
-			}
+//New method that removes the if statements completely
+//Not sure if it works yet
+			avg_value = calculate_averageValue(avg_value,avg_valueOrtho);
+			avg_valueOrtho = calculate_averageValueOrtho(avg_valueOrtho);
 
-			if(avg_valueOrtho == 0) {
-				avg_valueOrtho = 1;
-			}
 		
 			//Storing the averages back into the shared memory array
 			averages[thread_y * RADIUS + thread_x * radiusDiv + i] = avg_value;
 			averages[RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + i] = avg_valueOrtho;
+
+			//printf("%d %d %f %f\n",);
 		}
 		
 	}
@@ -427,6 +469,7 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 
 
 		}
+
 	}
 
 	__syncthreads();
