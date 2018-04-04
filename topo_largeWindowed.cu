@@ -69,6 +69,10 @@ Angles	|
 */	
 
 
+//Changes
+//March 6: 
+//		Individual if(threadIdx.x < (dividedRadius * angleSize)) is replaced by one long condition (Tested + Works)
+//		
 
 //---------------------------Function and Global variable declarations--------------------------------------------------------------------------//
 __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__ angle,float* __restrict__ anisotropy,float* __restrict__ azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv);
@@ -108,6 +112,17 @@ __device__ float calculate_averageValueOrtho(float averageValueOrtho)
 	return (ceil(averageValueOrtho/FLT_MAX) * averageValueOrtho + (1 - ceil(averageValueOrtho/FLT_MAX)) * 1);
 
 }
+
+//Function that emulates if(a<b){...} but without the if statement to avoid warp divergence
+__device__ float condition_if_lessthan(float valueA,float valueB,float result_ifAIsLessThanB, float result_ifAIsNotLessThanB)
+{
+
+	return ceilf(floorf(valueA/valueB)/FLT_MAX) * result_ifAIsNotLessThanB + (1.0 -  ceilf(floorf(valueA/valueB)/FLT_MAX) ) * result_ifAIsLessThanB;
+
+
+}
+
+
 //--------------------------------------------------------------------------------------------------------------------------//
 
 __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__ angle,float* __restrict__ anisotropy,float* __restrict__ azimuth,long int XSIZE,long int YSIZE,int RADIUS,int angleSize,int radiusDiv)
@@ -244,14 +259,14 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 		}
 	
 			
-	}
-	__syncthreads();
+	//}
+		__syncthreads();
 
 
 
 	//Single thread averaging over the row or x dimension (Using 1 thread per row)---------------------------------------------------------------------------//
 	//The block only contains threads in x dimension. Therefore, threadIdx.x is the thread index.	
-	if(threadIdx.x < (dividedRadius * angleSize)){
+	//if(threadIdx.x < (dividedRadius * angleSize)){
 
 		//Only getting thr threads from 0 to angleSize (0 to 35; ANGLESIZE = 36 is hard coded)
 		// Going through each Anglesize (y-direction) and getting the average of the row (x-direction)
@@ -270,14 +285,14 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 				avg_value = avg_valueSum/(2*(i+1));
 				averages[threadIdx.x * RADIUS + i] = avg_value;
 
-				
+		
 
 			}
 
 			//-------Getting the avg_valueOrtho and storing it in the shared mem array---------------------------------------------//	
 			//Can't use int to store a float
 			//sum_valueOrtho = 0;
-	
+
 			//Reusing variable
 			//Using avg_valueSum to store sum of avg_valueOrtho
 			avg_valueSum = 0.0;
@@ -290,15 +305,15 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 
 			}
 		}
-		//Now the first matrix has the averaged values (avg_value);
-		//And the second has the averaged Ortho values (avg_valueOrtho);	
-	}
+			//Now the first matrix has the averaged values (avg_value);
+			//And the second has the averaged Ortho values (avg_valueOrtho);	
+		//}
 
 
 
 
-	__syncthreads();
-
+		__syncthreads();
+	
 //Correct upto this point;
 //Result from this is in float while that from the previous version is in ints. Therefore two results differ by less than an int (Ex: 374 vs 374.200012)
 //Need to change the original code to make sure the results are stored in floats by using CUDA's conversion functions
@@ -384,34 +399,38 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 
 
 	//Error Checking-------------------------------------------------------------------------------------------------------------//	
-	if(threadIdx.x < (dividedRadius * angleSize))
-	{
-	
+	//if(threadIdx.x < (dividedRadius * angleSize))
+	//{
+		//thread_x = threadIdx.x - (int)((float)threadIdx.x / (float)dividedRadius) * dividedRadius; 
+		//thread_y = threadIdx.x / dividedRadius;
 		//----Error checking-----------------------------------------------------------------------------------------//
 		for(i=0;i<radiusDiv;i++){
-			//Getting averages and storing them in variables
-			avg_value = averages[thread_y * RADIUS + thread_x * radiusDiv + i];
-			avg_valueOrtho = averages[ RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + i];
-			
+			//Getting averages and storing them in variables 
 
-//New method that removes the if statements completely
-//Not sure if it works yet
+			avg_value = averages[thread_y * RADIUS + thread_x * radiusDiv + i];			
+			avg_valueOrtho = averages[ RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + i];
+		
+
+	//New method that removes the if statements completely
+	//Not sure if it works yet
 			avg_value = calculate_averageValue(avg_value,avg_valueOrtho);
 			avg_valueOrtho = calculate_averageValueOrtho(avg_valueOrtho);
 
-		
+	
 			//Storing the averages back into the shared memory array
 			averages[thread_y * RADIUS + thread_x * radiusDiv + i] = avg_value;
 			averages[RADIUS * angleSize + thread_y * RADIUS + thread_x * radiusDiv + i] = avg_valueOrtho;
 
-			//printf("%d %d %f %f\n",);
+
+			//printf("%d %d %f %f\n",thread_y,thread_x,avg_value,avg_valueOrtho);
 		}
-		
+	
+	//}
+//Works till here!
+
+		__syncthreads();
+
 	}
-
-	__syncthreads();
-
-
 
 	//--------------Transposing the matrix to get the smallest number from the columns-----------------------------------//
 //*********************
@@ -445,8 +464,70 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 */
 //------------------------------------------------------------------------------------------------------------//
 	//Finding the minimum over the columns
-	if(threadIdx.x < (dividedRadius * angleSize))
+	//if(threadIdx.x < (dividedRadius * angleSize))
+	//{
+
+			
+	if(threadIdx.x < RADIUS)
 	{
+
+		avg_value = averages[threadIdx.x];
+
+		avg_valueSum = angle[0];
+		
+		avg_valueOrtho = averages[RADIUS * angleSize + threadIdx.x];
+
+
+		//In the non shared memory version this looks like:
+		/*
+		if(avg_value < variance[j]) {
+			variance[j] = avg_value;
+			orientation[j] = angle[i];
+			ortho[j] = avg_valueOrtho;		
+		}
+		*/
+
+		for(i=0;i<angleSize;i++)
+		{			
+			//printf("Radius Angle current_value conditionalValue %d %d %f %f\n",threadIdx.x,i,averages[i*RADIUS + threadIdx.x],condition_if_lessthan(averages[i*RADIUS+threadIdx.x],avg_value,averages[i*RADIUS + threadIdx.x],avg_value));				
+
+			//Same condition for each case : if(avg_value < variance[j]);  Therefore the floorf, or the equation part does not change just the variables do
+			avg_valueSum = condition_if_lessthan(averages[i*RADIUS+threadIdx.x],avg_value,angle[i],avg_valueSum);
+			avg_valueOrtho = condition_if_lessthan(averages[i*RADIUS+threadIdx.x],avg_value,averages[RADIUS * angleSize + i * RADIUS + threadIdx.x],avg_valueOrtho);
+			avg_value = condition_if_lessthan(averages[i*RADIUS+threadIdx.x],avg_value,averages[i*RADIUS + threadIdx.x],avg_value);
+
+
+//avg_value same for this and the non-shared memory code 
+//Needed to move the avg_value calculation below others in the code above
+//printf("%d %d %f %f %f\n",threadIdx.x,i,avg_value,avg_valueSum,avg_valueOrtho);	
+//**Works till here
+			
+
+			/*
+			avg_value = floorf(averages[i*RADIUS+threadIdx.x]/avg_value) * avg_value + (1.0 -  floorf(averages[i*RADIUS+threadIdx.x]/avg_value) ) * averages[i*RADIUS + threadIdx.x];
+			avg_valueSum = floorf(averages[i*RADIUS+threadIdx.x]/avg_value) * avg_valueSum +  (1.0 -  floorf(averages[i*RADIUS+threadIdx.x]/avg_value) ) * angle[i];
+			avg_valueOrtho = floorf(averages[i*RADIUS +threadIdx.x]/avg_value) * avg_valueOrtho + (1.0 -  floorf(averages[i*RADIUS+threadIdx.x]/avg_value) ) * averages[RADIUS * angleSize + i * RADIUS + threadIdx.x];
+			*/
+
+				
+		}
+//Incorrect order of division; avg_value/avg_valueOrtho was put in instead of acg_valueOrtho/avg_value
+		printf("%d %d %d %d %f %f %f\n",threadIdx.x,i,dataIdx_x,dataIdx_y,avg_value,avg_valueSum,avg_valueOrtho);	
+		anisotropy[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = avg_valueOrtho/avg_value; 
+		azimuth[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = avg_valueSum * 180/3.14159; 
+		
+		__syncthreads();
+
+/*
+		anisotropy[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = avg_value/avg_valueOrtho; 
+		azimuth[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = avg_valueSum * 180/3.14159; 
+*/
+
+	//	printf("dataIdx_x dataIdx_y Radius Ani Azi %d %d %d %f %f\n",dataIdx_x,dataIdx_y,threadIdx.x,avg_value/avg_valueOrtho,avg_valueSum * 180/3.14159);
+		
+	}
+	
+/*
 
 		if(threadIdx.x < RADIUS)
 		{
@@ -470,22 +551,24 @@ __global__ void getMatrix(const int* __restrict__ data,const float* __restrict__
 
 		}
 
-	}
+	//}
 
-	__syncthreads();
+		__syncthreads();
 
-	if(threadIdx.x < (dividedRadius * angleSize))
-	{
+	//if(threadIdx.x < (dividedRadius * angleSize))
+	//{
 		if(threadIdx.x < RADIUS)
 		{
 			anisotropy[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = avg_value/avg_valueOrtho; 
 			azimuth[dataIdx_y * XSIZE * RADIUS + dataIdx_x * RADIUS + threadIdx.x] = sum_value * 180/3.14159; 
 		
-		}		
-	}
-
+		}
+		
+	}//End of the long if(threadIdx.x <(dividedRadius * angleSize) condition
+*/
 	//------------------------------------------------------------------------------------------------------------//
-return;		
+
+	return;		
 
  
 }
